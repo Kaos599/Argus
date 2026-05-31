@@ -1,0 +1,755 @@
+# Project Brief — "Argus": Generative-UI Insight Agent for MongoDB
+## A write-up for the Google Cloud Rapid Agent Hackathon (MongoDB partner track)
+
+> **Status:** Discussion + research document — **stashed for team review** as of 2026-05-31. Resumes when team has had a chance to react. Not an implementation plan yet.
+> **Author context:** Drafted with Claude on 2026-05-31, based on the lived experience of running daily digest queries against the Blaze production MongoDB via Claude Code + MongoDB MCP, plus parallel research across the hackathon rules, MongoDB MCP server, Google Cloud Agent Builder / ADK, and the generative-UI landscape.
+> **Working name "Argus":** from Greek mythology — Argus Panoptes, "Argus All-Eyes," the hundred-eyed giant who saw in every direction. Resonates with the "all-seeing" framing the team wanted. Alternatives if the team pushes back: **Iris** (Greek messenger goddess, also "eye"), **Sentinel** (modern watcher), **Aegis** (shield of Zeus marked with an eye). Single-syllable preference favors Argus.
+
+---
+
+## TL;DR (read this first)
+
+We have been manually doing one thing every day for months that *should* be a product:
+
+> *"Give me stats on any new users from the last 15 hours — name, email, message count, personas they're talking to. Same for returning users. How many completed story onboarding."*
+
+We built a digest endpoint in Blaze to formalize it. The endpoint works, but it is **static and situational** — every new question requires editing Python, adding fields to a Pydantic model, modifying a Slack formatter, redeploying. The thing we actually want — *"agent that reads our DB, decides what's interesting, renders cards we can drill into, and re-runs itself on a schedule"* — does not exist yet for MongoDB.
+
+The Google Cloud **Rapid Agent Hackathon** runs through **June 11, 2026** (about 11 days from today) and has a **dedicated MongoDB partner track** that requires exactly what we'd want to build: a Gemini-powered agent that uses Google Cloud Agent Builder and integrates the MongoDB MCP server. Prizes are $5k / $3k / $2k per track. Judges are real MongoDB engineers (Daoud Farooqi, Gaurab Aryal).
+
+**This document is a research + discussion brief**, not a commitment. It covers:
+
+1. **The Blaze problem** — concrete evidence of the pain, with file paths and query shapes
+2. **The hackathon** — rules, deadlines, hard constraints, what judges will weight
+3. **Google Cloud Agent Builder in 2026** — naming, what's actually shipping, what works
+4. **MongoDB MCP** — the tools surface, the safety model, the multi-tenancy gap
+5. **The "schema → insights" problem** — where the field is already crowded and where the whitespace genuinely is
+6. **Generative UI** — why it's our differentiator and which library wins
+7. **Recommended stack** — opinionated, mapped to the judging rubric
+8. **Open questions** — decisions we need to make together before scaffolding
+
+Read top-to-bottom for the full argument. Skip to §7 for the stack, §8 for "how do we maximize the two required tools," and §9 for what I need you to weigh in on.
+
+---
+
+## Decisions Made (2026-05-31)
+
+Captured during the first discussion pass:
+
+- **Positioning: Horizontal** — "agent + your MongoDB → insight cards for any product." Trade-off accepted: broader pitch, harder to make the demo emotional in 3 min; requires the onboarding flow to do more work telling the agent who the user is and what matters to them.
+- **Team: Full team — locked.** Co-builders identified; coordination handled offline.
+- **Codebase: entirely new.** Zero code, schema, or data borrowed from Blaze or Momentum. Fresh repo, fresh package name, fresh stack. Blaze stays as **case-study context** in the README — the lived problem that seeded the idea, with schema details preserved here as pain-point grounding — but the product knows nothing about it. Cleanly satisfies the Devpost "original creation, not a modification or extension" clause.
+- **Onboarding flow: Iterative preview (the original framing).** Minimal info up front → agent samples schema and proposes 2-3 candidate insights → user thumbs-up the direction → dashboard generates. See §7.4 for the concrete design.
+- **Demo data: TBD — synthetic likely** — defer choice; build synthetic data once the insight modules exist and we know what shapes look good on cards.
+- **Opening insight hook: TBD** — defer until we have a working insight engine; the right hook may emerge from what *actually* looks impressive when the agent runs.
+
+### What going horizontal changes
+
+| Was (vertical assumption) | Is now (horizontal) |
+|---|---|
+| Templates baked in for "founder dashboard" shapes (signups, MRR, churn) | Schema-blind discovery; templates emerge from what the data has |
+| Onboarding asks "are you SaaS / e-commerce / AI app?" and routes | Onboarding asks broader open-ended questions; agent does more inference |
+| Demo opens on a single vivid persona's data (Blaze) | Demo needs a *generic* opener that proves the agent didn't know what to look for |
+| 5 insight modules can be slightly opinionated for founders | 5 insight modules must be **truly schema-blind**; harder; the moat |
+| Pitch line: "your data team in a box" | Pitch line: TBD — needs to thread "any MongoDB" + "without prompting" + "renders itself" |
+
+**Implication for §5.5 (insight selection):** this becomes the load-bearing problem now. Horizontal pitch with weak insight selection = generic chatty-DB-agent. Horizontal pitch with strong insight selection = the genuine whitespace win.
+
+---
+
+## Part 1 — The Lived Context: Why this idea exists
+
+> **Frame for this section:** Blaze is the *case study* that grounds the pain — a real product whose daily operating loop revealed the gap this hackathon project fills. **None of Blaze's code, data, or schema crosses over into the hackathon build.** The hackathon repo is clean-room. What we carry forward is *the shape of the pain* and the *evidence* that this is a problem someone actually has — useful for the README's "Potential Impact" rubric item, and useful here to ground our design instincts in a real example rather than an imagined one.
+
+### 1.1 The pattern we kept hitting (in Blaze)
+
+Every couple of days, the same conversation:
+
+- **Question:** "How many users signed up in the last 12 hours? Give me name, email, persona, message count."
+- **The move:** Open Claude Code, MongoDB MCP is connected, write a one-off `db.users.find({...})` + `db.chats.aggregate([...])` chain against Blaze's prod MongoDB.
+- **Output:** A markdown table pasted back into the conversation. Useful for that moment. Discarded after.
+
+Then the question evolves: *"How many of them have actually completed story onboarding?"* Different query. *"Of returning users in the last 7 days, what's their warmth distribution?"* Different query. *"Of users who got the retention email yesterday, did any of them come back and message someone?"* Different query.
+
+Each variant is a new conversation, a new ad-hoc query. We never accumulate the leverage of "the system already knows how to answer questions in this shape."
+
+### 1.2 What we built (Blaze's digest endpoint) and why it's still painful
+
+We formalized the most-asked variant into a real endpoint inside Blaze:
+
+**File:** `~/Work/ai-persona-practice/backend/app/admin/router.py` (lines 436–442)
+
+```python
+@router.get("/analytics/daily-digest", response_model=DailyDigestResponse)
+async def admin_daily_digest(
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+) -> DailyDigestResponse:
+    """Generate the 12-hourly signup + activity digest and post it to Slack."""
+    _check_admin_key(x_admin_key)
+    return await _build_daily_digest()
+```
+
+`_build_daily_digest()` runs **nine separate MongoDB queries** — a time-windowed `find` on `users`, a fan-out on `chats`, a `$group` aggregation for active users in the window, a `$addToSet` for persona breakdown, a sort for top streaks, etc. Result is serialized into a Pydantic `DailyDigestResponse` model with eight fixed fields, then formatted as a Slack message:
+
+```
+*Blaze 12h Digest — 2026-05-31*
+_10:00 → 22:00 IST_
+
+*📊 Overview*
+• Total users:          *2,143*
+• Active (12h):         *47*
+• Returning (7d):       *12*
+• New signups:          *3*
+...
+
+*🆕 New Signups (3)*
+1. *Raj Kumar* `raj@example.com` — 14:32 IST | google | active | 2 chats
+   › ishita · 12 msgs · active
+   › aadya · 5 msgs · completed
+```
+
+It works. But to ask a *new* question — say, *"show me users with 5+ messages AND warmth ≥ 3 AND have completed story onboarding"* — we'd have to:
+
+1. Write a new MongoDB aggregation.
+2. Add a new field to `DailyDigestResponse`.
+3. Update the Slack formatter.
+4. Deploy the backend.
+
+That is the "static and situational" bottleneck. Every new question becomes a one-week PR. The endpoint shape is wrong, not the implementation — no amount of "add more fields" makes it more flexible; each field we add narrows what the endpoint is *for*.
+
+### 1.3 Why a rich schema doesn't save you — it makes it worse
+
+The thing that should make Blaze tractable — its rich, well-typed schema — is the same thing that makes the digest endpoint fragile. There's too much there to commit to fixed fields. Quick tour of what we'd want to be able to query *dynamically*:
+
+**Per-user lifecycle** (`backend/app/models/user.py`):
+```python
+class CumulativeMetrics(BaseModel):
+    total_messages_sent: int = 0
+    total_messages_received: int = 0
+    total_reactions_given: int = 0
+    total_reactions_received: int = 0
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    total_cost_usd: float = 0.0
+    total_chats: int = 0
+
+class SubscriptionState(BaseModel):
+    status: SubscriptionStatus = "trial_pending"
+    trial_starts_at: datetime | None = None
+    trial_ends_at: datetime | None = None
+    current_period_end: datetime | None = None
+    ...
+```
+
+**Per-chat warmth + persona state** (`backend/app/models/chat.py`):
+```python
+class ConversationState(BaseModel):
+    mode: Literal["simulation", "open_chat"] = "simulation"
+    warmth: float = 0.0
+    effective_warmth: float = 0.0
+    interest_ledger: list[dict] = Field(default_factory=list)
+    is_in_doubt: bool = False
+    current_turn: int = 0
+    persona_scratchpad: dict = Field(default_factory=dict)
+    last_compact_turn: int = 0
+```
+
+**Per-message warmth deltas + coaching labels:**
+```python
+class MessageDocument(BaseModel):
+    role: Literal["user", "assistant"]
+    warmth_at_send: float = 0.0
+    warmth_delta: float = 0.0
+    coaching_label: Optional[str] = None  # "Crushing it 🔥" etc
+    event_type: Literal["message", "no_response", "blocked", "unsend", ...]
+    user_reaction: Optional[str] = None
+    ai_reaction: Optional[str] = None
+```
+
+Every one of these fields is a *latent insight axis*. We could be asking:
+
+- *"Which coaching labels precede the biggest warmth gains?"*
+- *"What's the message-count distribution for trial users at hour 24, 48, 72?"*
+- *"For users who hit warmth ≥ 4 in their first session, how many converted to paid?"*
+- *"Which personas have the highest `consecutive_no_response_count` ceilings before user abandonment?"*
+
+We *can't* — not without writing more endpoints. And every endpoint is locked-in by the time we deploy. **The insight is hiding in the schema; the endpoint shape can't reach it.** This is the universal problem the hackathon project solves — any product with a rich MongoDB schema has the same dynamic between "what's in the data" and "what your dashboard can ask."
+
+### 1.4 The Blaze Eval skill is the same problem at a smaller scale
+
+We even built a *whole Claude Code skill* (`~/.claude/skills/blaze-eval/SKILL.md`) to encode the canonical diagnostic queries — e.g., compactor health, warmth progression, response-type breakdown:
+
+```javascript
+// All traces for this chat, chronological
+db.traces.find({ "context.chat_short_id": "CHAT_SHORT_ID" }).sort({ timestamp: 1 })
+
+// Response type breakdown
+db.traces.aggregate([
+  { $match: { "context.chat_short_id": "CHAT_SHORT_ID", type: "chat_send" } },
+  { $unwind: "$events" },
+  { $match: { "events.event": "chat.llm.response" } },
+  { $group: { _id: "$events.data.response_type", count: { $sum: 1 } } }
+])
+```
+
+The skill is genuinely useful. But it's still a *manual* diagnostic surface — the evaluator has to know which query to run for which symptom. Same root problem: the system doesn't *propose* what to look at; the human does.
+
+### 1.5 What "dynamic" should actually mean
+
+The thing we keep gesturing at is not "a chatbot for your database." It's a system where:
+
+1. The agent **owns the question-generation step**, not just the answering step.
+2. The agent **looks at the schema** and **picks what's interesting** without being told.
+3. The output is **opinionated, compact insight cards** — not a chat thread, not a static dashboard, not a CSV.
+4. The cards **update themselves** on a cadence and **propose drill-downs** ("you have 12 users in this segment — open this for the list?").
+5. The dashboard is **generative** — Gemini decides the card layout because we can't predict what insights will exist.
+
+That is the project. Blaze is the case study that proves the pain is real; the hackathon product generalizes the pattern to **any** MongoDB. Blaze's codebase, data, and schema **do not** carry over — they only inform our design intuitions.
+
+### 1.6 Concrete Blaze-shaped use cases (illustrative; demo will run on synthetic data)
+
+These are the kinds of questions the agent should be able to ask itself when pointed at a Blaze-like database. Listed here to make the pain concrete, not because we'll use Blaze data:
+
+| Use case | What the agent does | Card output |
+|---|---|---|
+| **"Show me retention email impact"** | Joins `users.created_at` × `users.last_login` × email-event timestamps; computes "users who logged in within 24h of email open" cohort | Card: bar chart of cohort sizes per email template + click-through to the user list |
+| **"How is story onboarding working?"** | Detects onboarding-completion flag in user docs; computes funnel from signup → onboarding-start → onboarding-complete → first-message; flags the biggest drop | Card: waterfall + the actual user IDs at each drop |
+| **"What's killing warmth?"** | Groups `messages` by `coaching_label`; ranks labels by avg `warmth_delta`; finds the labels with the most negative deltas | Card: ranked list of "warmth-killer" labels with example messages |
+| **"What's the trial → paid conversion looking like?"** | Joins `users.subscription` to `chats.metrics.message_count_user`; segments by "messages in first 24h"; computes conversion rate per segment | Card: cohort grid + dollar-value-at-stake |
+| **"Persona popularity drift"** | Time-series of new chats per persona, week-over-week, with statistical change-point detection | Card: small-multiple sparklines, biggest-mover called out |
+
+All of these are queries we've literally written ad-hoc in Claude Code at some point. The hackathon project would surface them automatically — for Blaze-the-database, but more importantly, for *any* database with similar shape (which is most consumer apps).
+
+---
+
+## Part 2 — The Hackathon: Rules, dates, what gets you eliminated
+
+### 2.1 The mechanics ([source: Devpost rules](https://rapid-agent.devpost.com/rules))
+
+- **Submission window:** May 5 → **June 11, 2026, 2:00 PM PDT**. Today is May 31. **~11 days left.** Devpost recommends submitting at least one week early to allow eligibility review.
+- **Judging window:** June 22 – July 6, 2026. Winners announced ~July 7.
+- **Eligibility:** Above age of majority (≥20 in Taiwan). India is eligible. Excluded countries include China, Russia, Iran, North Korea, Italy, Brazil, Quebec, and others. Employees of Google / Devpost / the six Partner Entities are ineligible. Teams up to 4.
+- **Project must be your "original creation"** — *"not a modification or extension"* of an existing project. We **cannot** fork an existing surface from Momentum or Blaze. Build fresh under a new repo with a `LICENSE` file from day one.
+- **Required deliverables:** hosted URL (web / Android / iOS), open-source repo *with a license file* (submissions have been rejected for missing one), **≤3-minute demo video** (YouTube/Vimeo), text description, completed Devpost form.
+
+### 2.2 The judging rubric — what actually scores points
+
+Two stages:
+
+- **Stage 1 — pass/fail viability.** The submission must "reasonably address the challenge and reasonably apply both the required data provided by Partner and Google Cloud products." Automated tools may be used to check.
+- **Stage 2 — four equally weighted criteria (25% each):**
+  1. **Technological Implementation** — *"Does the interaction with Google Cloud and Partner services demonstrate quality software development?"*
+  2. **Design** — *"Is the user experience and design of the project well thought out?"*
+  3. **Potential Impact** — *"How big of an impact could the project have on the target communities?"*
+  4. **Quality of the Idea** — *"How creative and unique is the project?"*
+
+Three out of four criteria reward us for things generative-UI + auto-insight naturally does: Design, Impact (you can demo a real lived problem), and Quality of Idea (most submissions will be chat-only). Technological Implementation gets satisfied by using ADK + MCP properly.
+
+### 2.3 The hard tech gates (read these carefully — easy to violate by accident)
+
+Verbatim from the rules: *"Build a functional agent—powered by Gemini and Google Cloud Agent Builder—that integrates a Partner Entity's MCP server."* Three hard requirements:
+
+1. **Gemini** for inference. Family is Gemini 3.x.
+2. **Google Cloud Agent Builder** (any of: ADK, Agent Studio, Agent Runtime — see §3).
+3. **At least one Partner MCP server** — for us, MongoDB.
+
+And the easiest violation to commit by accident, also verbatim: *"Projects are required to utilize Google Cloud artificial intelligence tools…All other artificial intelligence tools are not permitted."*
+
+**Translation: we cannot call Claude. We cannot call OpenAI. We cannot route through Vercel AI Gateway to non-Google providers.** Momentum's entire `claude_client.py` routing pattern (which falls back to OpenRouter on 401/402) would *disqualify the submission*. This has to be a Gemini-only build from scratch.
+
+Also: *"other services that directly compete with Google Cloud (for cloud platform capabilities) or with the Partner whose track you've selected"* are banned. So we can't deploy to AWS Lambda; can't use Pinecone instead of Atlas Vector Search.
+
+### 2.4 MongoDB partner track specifics
+
+- **Required tech:** MongoDB Atlas. Highlighted on the track page: **Atlas Vector Search, Atlas Search, MongoDB MCP Server**. Free Atlas M0 tier is enough.
+- **Suggested architecture (from MongoDB's own how-to):** *"Connect your Gemini-powered agent to MongoDB Atlas via the MongoDB MCP Server… Use Atlas Vector Search for semantic retrieval, Atlas Search for full-text queries, and aggregation pipelines."*
+- **Suggested embeddings:** Voyage AI (`voyage-3-large`, owned by MongoDB) or Gemini's `gemini-embedding-001`.
+- **Judges:** Daoud Farooqi (Partner Solutions Architect, MongoDB) + Gaurab Aryal (Senior PM, MongoDB). Both engineers. They will read the code. They will know if we faked MCP integration with a HTTP shim.
+
+### 2.5 Prize structure
+
+- **$60,000 total pool** split across **six identical partner buckets** (Arize, Elastic, Fivetran, GitLab, MongoDB, Dynatrace).
+- Per bucket: **$5,000 / $3,000 / $2,000** + social-media promotion for 1st.
+- One prize max per submission — commit to MongoDB.
+
+There is **no separate "Google Cloud Agent Builder" prize bucket**. Agent Builder is the mandatory platform for everyone; partners are the differentiators.
+
+---
+
+## Part 3 — Google Cloud Agent Builder in 2026: what's actually shipping
+
+### 3.1 The naming is genuinely confusing — here's the actual hierarchy
+
+At Google Cloud Next 2026, Google **renamed Vertex AI to Gemini Enterprise Agent Platform (GEAP)** and folded Agentspace into it. The current hierarchy:
+
+- **Gemini Enterprise Agent Platform (GEAP)** — umbrella (formerly "Vertex AI")
+  - **Agent Studio** — low-code visual canvas (formerly Vertex AI Agent Builder / App Builder)
+  - **Agent Development Kit (ADK)** — open-source code-first framework (Python, TypeScript, Go, Java)
+  - **Agent Garden** — prebuilt agent templates
+  - **Agent Runtime** — managed serving (formerly Vertex AI Agent Engine, now called "Deployments" in console)
+  - **Model Garden** — 200+ models
+  - **Memory Bank** — long-term agent memory
+
+**What the Devpost rules mean by "Google Cloud Agent Builder":** anything in this family qualifies — Agent Studio (no-code) or ADK (code-first). For a hackathon judged 25% on Technological Implementation, **ADK is the right pick.** Agent Studio alone gives the judges nothing to evaluate; ADK lets us write real Python they can review.
+
+### 3.2 MCP is first-class in ADK — this is the killer feature for us
+
+`McpToolset` is a built-in ADK primitive. Drop the MongoDB MCP server in as a stdio subprocess, ADK auto-discovers the tools and proxies them to the agent. Three transports supported: stdio (local subprocess), Streamable HTTP, SSE.
+
+Canonical wiring (from the official `google/adk-docs` repo):
+
+```python
+from google.adk.agents import Agent
+from google.adk.tools.mcp_tool import McpToolset
+from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
+from mcp import StdioServerParameters
+
+root_agent = Agent(
+    model="gemini-flash-latest",   # resolves to gemini-3-flash-preview
+    name="mongodb_agent",
+    instruction="Help users query and analyze MongoDB collections",
+    tools=[McpToolset(
+        connection_params=StdioConnectionParams(
+            server_params=StdioServerParameters(
+                command="npx",
+                args=["-y", "mongodb-mcp-server", "--readOnly"],
+                env={"MDB_MCP_CONNECTION_STRING": "mongodb+srv://..."},
+            ),
+            timeout=30,
+        ),
+    )],
+)
+```
+
+That's 15 lines and we have an agent that can `find`, `aggregate`, inspect schema, etc. on the user's database. The rest of the project — insight selection, card rendering, scheduling — is the part where we earn the prize.
+
+### 3.3 Gemini model reality check
+
+You mentioned "Gemini 3.5 Flash." That's a real model — it shipped May 19, 2026 (12 days ago). But the family lineage matters; we have multiple Gemini 3.x models live:
+
+| Model ID | Released | Status |
+|---|---|---|
+| `gemini-3-pro-preview` | Nov 18, 2025 | Shut down; alias redirects to 3.1 |
+| `gemini-3.1-pro-preview` | Feb 19, 2026 | Live |
+| `gemini-3-flash-preview` | Dec 17, 2025 | Live, most battle-tested for agents |
+| `gemini-3.5-flash` | **May 19, 2026** | Live (preview), newest |
+| `gemini-3.1-flash-lite` | May 7, 2026 | Live |
+| `gemini-flash-latest` (alias) | — | → `gemini-3-flash-preview` |
+| `gemini-pro-latest` (alias) | — | → `gemini-3-pro-preview` → 3.1 |
+
+**Recommendation:** Use `gemini-3-flash-preview` for the agent's tool-routing loop (lowest latency, best-tested for function calling) and `gemini-3.1-pro-preview` for the insight-planning step (better reasoning). Optionally try `gemini-3.5-flash` for the planner since it just shipped — but bake that into a feature flag, don't depend on it during the demo.
+
+Gemini 3 introduced agent-specific features judges will notice: **streaming function calling** (props arrive while the tool is still executing), **multimodal function responses** (tools can return images/audio fed back to the model), **thought signatures**, **`MINIMAL`/`MEDIUM`/`HIGH` thinking levels**.
+
+### 3.4 Deployment paths
+
+- **Agent Runtime (managed)** — easiest; integrated session management + Memory Bank.
+- **Cloud Run** — most flexibility; BYO container.
+- **GKE** — overkill for hackathon.
+
+**Recommendation:** Cloud Run for the agent backend (Python/FastAPI/ADK), Vercel for the Next.js frontend. Cloud Run satisfies the "Google Cloud" gate cleanly; Vercel is just our fastest deploy path for the frontend (and the rules don't forbid hosting the *frontend* on Vercel — only competing AI services).
+
+### 3.5 Observability
+
+ADK has Cloud Observability and Topology traces built in. Mention it in the README. Free Tech Implementation points.
+
+---
+
+## Part 4 — MongoDB MCP: tools, safety, what's NOT in the box
+
+### 4.1 What the server gives us
+
+The canonical implementation is [`mongodb-js/mongodb-mcp-server`](https://github.com/mongodb-js/mongodb-mcp-server), shipped by MongoDB Inc. TypeScript/Node, distributed via `npx`, Docker, and bundled into the official Claude/Codex/Cursor plugins. Two transports: stdio (default, for local agent integration) and Streamable HTTP (explicitly NOT recommended for production without an auth gateway in front).
+
+**Tools provided** — 24 database + 13 Atlas:
+
+| Category | Tools |
+|---|---|
+| **Read** | `find`, `aggregate`, `aggregate-db`, `count`, `explain`, `export` |
+| **Metadata** | `list-databases`, `list-collections`, `collection-indexes`, `collection-schema`, `collection-storage-size`, `db-stats`, `mongodb-logs` |
+| **Connect** | `connect` |
+| **Write (disabled in `--readOnly`)** | `insert-one/many`, `update-one/many`, `delete-one/many`, `create-index`, `drop-index`, `rename-collection`, `drop-collection`, `drop-database` |
+| **Atlas mgmt (separate auth)** | `atlas-list-orgs/projects/clusters/db-users/alerts`, `atlas-inspect-cluster/access-list`, `atlas-create-free-cluster/project/db-user/access-list`, `atlas-connect-cluster`, `atlas-upgrade-cluster`, `atlas-get-performance-advisor` |
+
+This session's deferred-tool list (`mcp__MongoDB__aggregate`, `mcp__MongoDB__find`, `mcp__MongoDB__collection-schema`, etc.) is the read-only subset — consistent with running in `--readOnly` mode.
+
+### 4.2 The safety model — the most important part for our product
+
+We will be asking users to **paste a connection string to their production database**. We have to think about this like building a banking app, not a hackathon toy. MongoDB's official Security Best Practices doc is unambiguous and we should follow it verbatim:
+
+1. **`--readOnly` flag always on.** When set, write tools are *removed from the tool list* — not just refused. Defense layer 1.
+2. **Use a read-only DB user too.** Don't trust the flag alone. Defense layer 2.
+3. **Never put credentials in CLI args** (they show up in process lists). Use `MDB_MCP_CONNECTION_STRING` env var.
+4. **For HTTP transport** (if we ever expose one), put it behind an OAuth 2.1 resource server / reverse proxy. Anti-patterns: direct auth, pass-through auth.
+5. **`disabledTools` config** to disable Atlas-management tools we don't need.
+6. **Per-tool user confirmation** for dangerous ops (most are gone in readOnly anyway).
+
+**Our implementation pattern:** spawn `mongodb-mcp-server@latest --readOnly` as a **subprocess per authenticated user request**, with their connection string injected via env var. Don't pool servers across tenants. One subprocess per user request, killed when the request ends.
+
+### 4.3 Multi-tenancy — we own it, MCP doesn't
+
+The MCP server has **no notion of tenants**. MongoDB's hands-on guide lists three patterns we'd inherit:
+
+- **Database-per-tenant** — one Atlas DB per customer; strongest isolation; config sprawl.
+- **Collection-per-tenant** — shared DB with prefixed collections.
+- **Shared collections with `tenantId` field** — every query must filter; cross-leak risk if the LLM forgets the filter (and it will).
+
+For our hackathon, the subprocess-per-request pattern (per 4.2) handles isolation cleanly — we never read or write our own data, just proxy queries against the user's DB. If we ever cache schema or insight history, that goes in *our* Atlas with a `tenantId` field — and that's *our* multi-tenancy concern, not the user's database's.
+
+### 4.4 Schema inference — what `collection-schema` actually does
+
+Under the hood, the official MCP server uses the [`mongodb-js/mongodb-schema`](https://github.com/mongodb-js/mongodb-schema) library. It:
+
+- **Samples ~100 documents by default** (configurable).
+- Recursively descends nested docs (`subFields`).
+- Marks a field "required" if it appears in 100% of sampled docs (probabilistic, not authoritative).
+- Handles inconsistent types as union types (`"string|null"`).
+- Returns indexes alongside schema.
+
+**Gotcha:** sampling 100 docs out of millions misses rare-but-important fields. E.g., `subscription.canceled_at` only exists on 0.5% of users → 99.5% chance a 100-doc sample misses it entirely. Our agent will need to **probe with `{$exists: true}` aggregations** on candidate fields after initial schema sampling. This is a real implementation detail to design for, not a rounding error.
+
+### 4.5 Vector search via MCP — yes, with caveats
+
+`$vectorSearch` is supported as the first stage of an aggregation pipeline. The agent can create vector indexes, `insert-many` with automatic embedding (requires `MDB_MCP_VOYAGE_API_KEY`), and run semantic queries. Pre-filtering on vector index fields was added in Oct 2025. **Quantization is NOT supported via MCP** — limiting for very high-dim embeddings.
+
+For our hackathon: we use vector search if we need to find "similar users" or "similar conversations" for an insight ("here are 5 other users who hit the same warmth pattern as this one"). Free Atlas tier supports vector indexes — no extra cost.
+
+### 4.6 What MCP does NOT give us — gaps we'd have to build around
+
+- **No scheduling/cron.** MCP is request-response. The cron tick has to live in our backend (Cloud Run + Cloud Scheduler, or a small Python loop) and call MCP tools each tick.
+- **No change streams via MCP.** MongoDB's [Real-Time Customer Retention reference architecture](https://www.mongodb.com/docs/atlas/architecture/current/solutions-library/customer-retention/) uses Atlas Stream Processing + change streams *natively*, not via MCP. If we want sub-minute reaction to DB writes, MCP polling is the wrong tool — we'd want change streams directly. **For the hackathon, MCP polling on a 5-minute tick is fine.** Change streams are a v2 story.
+- **No semantic layer / cached "what does this collection mean."** Every session re-samples. We memoize schema + LLM-derived semantics ourselves in our own Atlas DB.
+- **No multi-tenant authz.** §4.3.
+
+---
+
+## Part 5 — The hard problem: schema → insights (where we differentiate, where we don't)
+
+This is the part that will make or break the project. The agent has to **decide what's interesting** without being told. That problem is *partially* solved in adjacent spaces and we need to be honest about where.
+
+### 5.1 The crowded spaces — don't pitch as these
+
+- **Text-to-SQL / text-to-MQL.** Solved-ish for SQL by [Vanna AI 2.0](https://github.com/vanna-ai/vanna), Hex Magic, DataChat. Vanna's accuracy paper shows schema-only prompting hits ~3% accuracy; RAG-over-examples lifts it to ~80%. **But Vanna doesn't support MongoDB.** Their DB list is Snowflake/BigQuery/Postgres/MySQL/etc. No Vanna-for-Mongo. That's a real, narrow gap.
+- **Auto-insight engines on warehouses.** [Power BI Quick Insights](https://learn.microsoft.com/en-us/power-bi/create-reports/insights), [Tableau Explain Data](https://help.tableau.com/current/online/en-us/explain_data_explained.htm), [ThoughtSpot SpotIQ](https://docs.thoughtspot.com/cloud/latest/spotiq-custom) all have multi-year head starts on the statistical rigor (Seasonal Hybrid ESD for anomaly detection, ridge-regression-based dimension explanation, change-point algorithms). We can't out-engineer them on time-series statistics in 11 days. But they all assume a *relational warehouse* with a defined semantic layer. None of them point at a raw MongoDB and say "go."
+- **Product-analytics agents.** [Amplitude Global Agent](https://amplitude.com/ai-agents), [Mixpanel Agent](https://docs.mixpanel.com/docs/mixpanel-agent), [Heap Sense](https://www.heap.io/platform/artificial-intelligence). These do auto-insight chat-style. **But they all require your product to be instrumented in their taxonomy** (events → properties → users). They can't read an arbitrary user's MongoDB.
+
+### 5.2 The whitespace — what we should pitch as
+
+| Whitespace | Why it exists | Why we can hit it in 11 days |
+|---|---|---|
+| **MongoDB-native, schema-blind auto-insight** | No Vanna-for-Mongo. Incumbents assume warehouses or product-event taxonomies. | MongoDB MCP server is shipped; ADK gives us the agent loop for free. |
+| **Insight CARDS instead of chat threads** | Mixpanel/Amplitude give chat answers. PowerBI/Tableau give static dashboards. Nothing renders compact, opinionated, drill-downable cards generated on the fly. | Tambo (gen-UI lib, §6) makes this a 2-day build. |
+| **Cross-source closed-loop** ("email open → DB check → card update") | Production analog (MongoDB Atlas Stream Processing) requires the streaming infrastructure. A *polled* version via MCP is genuinely novel. | A cron tick + MCP polling is enough for the demo. |
+
+**Pitch line:** *"MongoDB-native, schema-blind, generative insight cards — for the solo founder who doesn't have a data team."*
+
+### 5.3 Academic prior art worth name-dropping in the README (not in the pitch)
+
+Five 2025 papers converge on the multi-agent + skill-library + insight-scoring pattern:
+
+- **DeepAnalyze-8B** ([arXiv 2510.16872](https://arxiv.org/html/2510.16872)) — first 8B agentic LLM trained end-to-end for data science.
+- **AgentAda** ([arXiv 2504.07421](https://arxiv.org/html/2504.07421)) — "skill-informed" agent that pulls from a library of analytical methods via hybrid RAG matcher. Best-of-judge wins ~60% vs unskilled.
+- **Data-to-Dashboard (KDD 2025)** ([arXiv 2505.23695](https://arxiv.org/pdf/2505.23695)) — multi-agent (domain detector → concept extractor → analysis generator → tree-of-thought chart picker).
+- **MDSF** ([arXiv 2501.01014](https://arxiv.org/pdf/2501.01014)) — Multidimensional Data Storytelling Framework with insight scoring + Top-K ranking.
+- **MaRGen** ([arXiv 2508.01370](https://arxiv.org/pdf/2508.01370)) — Amazon multi-agent that generates 6-page market reports in 7 min for ~$1.
+
+**Borrow from these:** the "skill-library" framing (AgentAda) and the "insight scoring + Top-K ranking" mechanism (MDSF) are directly applicable.
+
+### 5.4 The five insight categories the agent should auto-surface
+
+Grounded in (a) the SpotIQ/Tableau/PowerBI feature sets, (b) the MongoDB customer-retention reference arch, (c) the MDSF insight-scoring taxonomy:
+
+1. **Funnel breaks** — detect step-to-step drop ratios in any sequential collection. Auto-rank by `drop_ratio × volume_at_step` (absolute lost users, not just %). **Card UX:** waterfall + delta vs last period + suggested cohort to investigate.
+2. **Cohort retention curves with cliff detection** — month-0-to-month-N retention matrix per signup cohort. Auto-flag the first "cliff." **Card UX:** heatmap + annotation arrow at cliff + suggested re-engagement segment.
+3. **RFM segmentation with revenue-at-stake** — Recency / Frequency / Monetary → Champions / Loyal / At-Risk / Cannot-Lose-Them / Hibernating labels. Compute revenue-at-stake per segment so the card answers "who do I email tomorrow?" not "tell me about my customers." **Card UX:** 6-cell grid, each cell = count + dollar value + 1-click action.
+4. **Channel/source attribution to LTV** — group new users by acquisition source, compute downstream LTV. This is the closest analog to your "email open → DB check → channel insight" story. **Card UX:** stacked bar with two metrics (volume vs LTV) + ratio callout.
+5. **Behavioral anomaly / change-point on key metrics** — Seasonal Hybrid ESD or z-score-based change detection on any time-series the schema reveals. When a change fires, run the Tableau Explain Data pattern: schema-walk categorical fields, group time-series by each, score which grouping best "explains" the anomaly. **Card UX:** line chart with anomaly highlighted + top-3 dimensions explaining it ("Spike was driven by `utm_source=tiktok`").
+
+**Optional 6th (stretch):** "Real-time behavioral signal" cards (`high-intent`, `exit-risk`, `search-friction`) patterned after the MongoDB customer-retention reference. Requires change-stream ingestion, not pure MCP — flag as v2.
+
+### 5.5 The hidden hard problem: insight *selection*
+
+When the agent CAN ask anything, how does it prioritize what to surface? Open techniques (combine, don't pick one):
+
+- **MDSF insight scoring** — score each candidate insight on novelty, magnitude, actionability; show Top-K.
+- **User-stated "north star"** — the onboarding flow asks "what do you care about most?" (revenue, retention, engagement); we weight insights toward that axis.
+- **Anti-staleness** — don't show the same insight twice in a row unless it's changed by ≥X%.
+
+This is the part of the project worth our best thinking. The UI is the demo; the insight selection is the moat.
+
+---
+
+## Part 6 — Generative UI: the differentiator, the library choice, the security model
+
+### 6.1 Why generative UI matters here
+
+If we render fixed templates (a `MetricCard` component, a `ChartCard` component, etc.), we're back to the Blaze digest problem at a different layer — *we* decide what shapes exist, and any insight that doesn't fit a template doesn't render. Generative UI flips this: the agent emits **typed component descriptions** (not raw JSX — see §6.3), and the frontend assembles them dynamically. New insight shapes show up without us shipping code.
+
+This is also our judging-rubric weapon. Most submissions will be chat-only. Cards rendered on the fly will visibly stand out for **Design** (25%) and **Quality of Idea** (25%).
+
+### 6.2 The library landscape (May 2026) and our pick
+
+| Library | Type | MCP-native? | Fit for cards |
+|---|---|---|---|
+| **Tambo** ([tambo.co](https://tambo.co/)) | React SDK for "agents that speak your UI" | Yes (`MCPTransport`) | **★ Recommended** — exactly maps to our use case (Generative cards + Interactable boards) |
+| **Vercel AI SDK UI + AI Elements** | Chat shell + shadcn primitives | Indirect | Best for the chat surface, not the cards |
+| **Vercel `json-render`** | Catalog-based JSON → component, multi-framework | Via `@json-render/mcp` | Strongest security; newer (Mar 2026), less battle-tested |
+| **assistant-ui** | Tool-call-driven generative UI | Yes | Solid; smaller community |
+| **Vercel AI SDK RSC `streamUI`** | React Server Components | No | **Don't use** — Vercel's own docs mark it experimental and recommend AI SDK UI instead |
+
+**Our pick:** **Tambo for the insight cards**, **AI Elements (shadcn) for the chat shell**, **shadcn/ui Recharts** as the underlying chart primitives Tambo registers. Tambo hit 1.0 in 2026, is open-source + self-hostable, registers components with **Zod schemas** (the agent picks which to render and streams props), and has first-class MCP support. The Generative / Interactable component split maps exactly onto our pattern: insight cards = Generative, the board they pin to = Interactable.
+
+### 6.3 The chart-from-data-shape problem
+
+When the agent has a result set, which chart does it pick? Don't reinvent — encode the [`ggauto`](https://github.com/nrennie/ggauto) decision table directly in the agent's prompt:
+
+| Var 1 | Var 2 | Var 3 | Chart |
+|---|---|---|---|
+| date | continuous | — | line |
+| continuous | continuous | — | scatter |
+| discrete | continuous | — | bar |
+| discrete | discrete | — | heatmap |
+| date | continuous | discrete | small multiples |
+| ... | ... | ... | ... |
+
+Don't ship a full Draco / VizML solver — overkill for 11 days. shadcn/ui's chart primitives on Recharts v3 cover everything we need.
+
+### 6.4 Security — Gemini emitting UI
+
+If we're not careful, generative UI is an XSS vector. Three layers of defense:
+
+1. **Never let the model emit raw JSX/HTML.** Tambo and json-render both enforce this *by design* via component catalogs + Zod schema validation. The model emits *data*, not markup.
+2. **For any markdown the model does emit** (titles, narrative blurbs), use [`harden-react-markdown`](https://github.com/vercel/harden-react-markdown) (Vercel-maintained) or [`llmrender`](https://github.com/franciscop/llmrender). URL allowlist (`http:`/`https:` only; anything else becomes `#`), HTML-tag allowlist, `on*` event handlers always stripped.
+3. **For URLs in tool args** (model might emit `<Card href="javascript:..."/>`), apply explicit URL transform with a two-gate sanitizer.
+
+This is solved territory. We just have to use the libraries correctly.
+
+---
+
+## Part 7 — Recommended stack and architecture
+
+### 7.1 One-sentence architecture
+
+> **Next.js frontend (Tambo + AI Elements on Vercel)** ↔ **FastAPI / Python backend on Cloud Run (ADK agent with Gemini 3 Flash + MongoDB MCP Server via `McpToolset`, per-user readOnly subprocess)** ↔ **User's MongoDB Atlas (their data, never modified) + Our MongoDB Atlas M0 (memoized schema, insight history, user preferences, Vector Search for similar-insight retrieval)**.
+
+### 7.2 Layer table
+
+| Layer | Pick | Why | Maps to rubric |
+|---|---|---|---|
+| Agent framework | **Google ADK (Python)** with `McpToolset` | First-class MCP, satisfies the GCP Agent Builder gate, code judges can read | Tech Implementation |
+| Model | `gemini-3-flash-preview` (routing) + `gemini-3.1-pro-preview` (planning) | Newest stable-enough; flash is fast for demos | Tech Implementation |
+| User data | **MongoDB Atlas (the user's)** via MCP | Required by track; per-user `--readOnly` subprocess | Tech Implementation |
+| Our data | **MongoDB Atlas M0** (free) with Vector Search | Required by track; memoizes schema + insight history; vector search finds similar insights | Tech Implementation |
+| Tools | **`mongodb-mcp-server` (npx, readOnly)** + `disabledTools=atlas` for safety | Required; 24 DB tools out of the box | Tech Implementation |
+| Embeddings | `gemini-embedding-001` | Native to Gemini stack; works with Atlas Vector Search | Tech Implementation |
+| Backend deploy | **Cloud Run** | Satisfies "Google Cloud" cleanly; trivial CD | Tech Implementation |
+| Frontend | **Next.js 14 + Tambo + AI Elements** | Generative cards + chat shell, current best practice | Design, Quality of Idea |
+| Insight modules | **5 skill modules** (funnel, cohort, RFM, attribution, anomaly) — AgentAda pattern | Skill library, not free-styling — better insights | Impact, Quality of Idea |
+| Scheduling | **Cloud Scheduler → Cloud Run cron endpoint** every 5–15 min | MCP doesn't schedule; we own this | Tech Implementation |
+| Insight scoring | **MDSF Top-K rank** by (novelty × magnitude × user-stated-axis weight) | Avoids same-insight-every-tick | Quality of Idea |
+| Observability | ADK Cloud Observability + a Langfuse mention in README | Free Tech Implementation points | Tech Implementation |
+| Security | `--readOnly` flag + read-only Mongo user + URL sanitizer + Zod-typed components | Defense in depth; we're touching user prod data | Tech Implementation, Impact (trust) |
+
+### 7.4 The iterative-preview onboarding flow (locked decision)
+
+This is the key UX pattern for the horizontal pitch. It's what gives the agent enough context to surface meaningful insights without forcing the user to fill in a wizard, and it's the single most demo-able sequence we can show in the 3-min video.
+
+**Five steps, ~60 seconds total in the demo:**
+
+1. **Connection step (~5 sec)** — User pastes their MongoDB connection string. Optionally: paste a URL to their product (the agent fetches og:description and h1 text as a *weak* hint about the domain). One free-text field: *"In one line, what does this product do?"* — optional, skipable.
+2. **Schema sampling (~10 sec, animated)** — Agent calls MCP: `list-collections` → `collection-schema` (samples ~100 docs each) → targeted `{$exists}` probes on candidate fields the schema returned as "sometimes present." UI shows live ticker: *"Inspecting `users` … 7 fields with rich nesting"*, *"Inspecting `orders` … 3 time-series patterns detected"*. This is *fast theater* — feels like the agent is genuinely exploring.
+3. **Hypothesis generation (~15 sec)** — Agent forms 2-3 candidate insight directions, each as a small **preview card** showing the *shape* of what the dashboard would look like (placeholder numbers, real chart type, real field names from the user's schema). Examples on a typical app DB:
+    - *"User activation funnel — looks like there's a drop between signup and first action. Want me to dig in?"* (preview: small waterfall)
+    - *"Retention cliff — your cohort retention drops sharply around day 7. Want me to find what's different about users who stay?"* (preview: heatmap)
+    - *"Source-to-LTV mismatch — your highest-volume channel isn't your highest-value. Want me to surface which is which?"* (preview: stacked bar)
+4. **User thumbs-up (~5 sec)** — User picks 1+ direction(s). Could be all three. UI is one-click per card: thumbs up = keep, thumbs down = never show this again, "more like this" = expand a category. This is the *teaching signal* the agent uses to weight future insight selection.
+5. **Dashboard materializes (~25 sec, animated)** — Agent runs the actual queries against the live DB, Tambo cards stream in progressively (props start appearing before the data is fully computed, thanks to Gemini 3 streaming function calling). Cards land sorted by user's stated picks first, then the agent's own ranking.
+
+**After onboarding (the always-on loop):**
+
+- Cron tick every N minutes re-runs the picked insight modules and refreshes their cards.
+- Every K ticks, the agent runs a *discovery pass*: samples new schema-blind hypotheses; if any score above a threshold (MDSF-style), surfaces them as a "Discover" card alongside the existing dashboard. User can thumbs-up to add to the always-on set or dismiss.
+- The agent's "skill library" (AgentAda pattern) grows over time — modules the user keeps see their priors strengthened; modules the user dismisses get suppressed.
+
+**Why this beats the alternatives:**
+
+- vs *pure schema-blind* — the user-stated north star (even just from picking 1 of 3 cards) gives the insight scorer enough to avoid randomness.
+- vs *heavy wizard* — the perceived friction is ~30 seconds of agent showing-off, not 5 minutes of form-filling.
+- vs *non-iterative single-pass* — every cron tick the agent gets smarter about what *this* user values, without ever asking again.
+
+**Demo storyboard implication:** the 3-min video opens on step 1 (connection paste), spends 60 sec showing steps 2-5 with live narration ("watch — it's just looking at the schema, it hasn't seen anything like this before"), then 90 sec on the actual cards (one detailed drill-down + one "and 4 more"), then 30 sec on cron refresh + new insight discovery the next "morning."
+
+### 7.5 The Day-1 → Day-11 sequence (rough)
+
+| Days | Milestone |
+|---|---|
+| **D1** | New repo + `LICENSE` + Cloud Run skeleton + ADK + `McpToolset` wired to a test MongoDB (Blaze read-only user). Verify Gemini 3 Flash + MongoDB MCP roundtrip. |
+| **D2–3** | Onboarding flow: paste connection string → schema sampling (with `{$exists}` probing) → user picks a north-star axis → first 3 insight modules running. |
+| **D4–6** | Build out all 5 insight modules + MDSF-style scoring + Top-K selection. Memoize schema in our Atlas. |
+| **D7–8** | Tambo cards: `MetricCard`, `FunnelChart`, `CohortHeatmap`, `RFMGrid`, `AnomalyCallout`, `ChannelAttributionBar`. shadcn theming. |
+| **D9** | Cloud Scheduler cron tick. Insight history. Drift detection (don't show same card twice unchanged). |
+| **D10** | Polish: 3-min demo video (Blaze as the demo DB — real, vivid, our own). README with architecture diagram + citations. |
+| **D11** | Submit. Submit a day early per Devpost's recommendation. |
+
+This is tight. We will cut features. That's expected.
+
+---
+
+## Part 8 — How we maximize the two required tech stacks (your explicit ask)
+
+### 8.1 Maximizing Google Cloud Agent Builder
+
+The hackathon doesn't grade us on using *more* of GCP — they grade us on using it *well*. So "maximize" here means **picking the surfaces judges can recognize and showing them off intentionally**.
+
+| Surface | What we do | Why it matters |
+|---|---|---|
+| **ADK Python framework** | Whole agent loop is ADK — not LangChain, not custom | "Quality software development" rubric item |
+| **`McpToolset` with stdio MongoDB MCP** | Verbatim official pattern from `google/adk-docs` | Judges will pattern-match instantly |
+| **Multi-agent topology** (planner ↔ executor ↔ critic) | ADK supports multi-agent natively; use it for the insight-selection loop | Visible engineering depth |
+| **Agent Runtime OR Cloud Run + Cloud Scheduler** | Either qualifies; Cloud Run gives us more control | "Google Cloud" tick-box |
+| **Cloud Observability traces** | ADK has built-in tracing; show traces in the README | Tech Implementation evidence |
+| **Memory Bank** for user preferences | Long-term store of "this user cares about retention, not revenue" | Quality of Idea — feels personalized |
+| **Gemini 3 advanced features** | `MINIMAL`/`MEDIUM`/`HIGH` thinking levels per agent role; streaming function calling; multimodal function responses | "Built for Gemini 3, not just running on it" |
+| **Vertex AI for embeddings** (`gemini-embedding-001`) | Same provider as the model — clean architecture story | Tech Implementation |
+
+What we **don't** do: Agent Studio (no-code). It would actively *hurt* our Tech Implementation score because there's no engineering substance to evaluate.
+
+### 8.2 Maximizing MongoDB MCP
+
+Same principle: depth over surface area. Hit every "MongoDB-recommended" pattern the judges (literally MongoDB engineers) will check for.
+
+| Surface | What we do | Why it matters |
+|---|---|---|
+| **`mongodb-mcp-server` as stdio subprocess** | Official server, not a custom shim | Pattern-match for judges |
+| **`--readOnly` + read-only DB user** | Both layers, per official security guide | Judges will *test* this — they'll paste a connection string and try to break it |
+| **`collection-schema` + targeted `{$exists}` probes** | Acknowledge schema-sampling gaps and work around them | Shows we read the docs |
+| **`aggregate` with rich pipelines** ($facet, $bucket, $setWindowFields, $merge for materialized views) | Not just `find()` queries — show off MQL | "Quality software development" |
+| **Atlas Vector Search** ($vectorSearch with pre-filter) for "find similar insights" / "find similar users" | The track page explicitly highlights this | Required by track narrative |
+| **Atlas Search** for fuzzy field name matching during schema inference | "Did you mean `created_at` or `createdAt`?" | Easy win, judges notice |
+| **Voyage AI embeddings** OR `gemini-embedding-001` | Either qualifies; Voyage is MongoDB's preferred | Tracks MongoDB's stated direction |
+| **`atlas-get-performance-advisor`** (read-only Atlas tool) | Our agent can SUGGEST indexes when it sees a slow query pattern, but never creates them | Insightful — proves we know the platform |
+| **Materialized insight collection** in our Atlas (with TTL) | Don't recompute every tick; cache scored insights with `_id = (tenantId, insightSlug, period)` | Real engineering, not toy |
+| **Change-stream stretch** | If time: agent reacts to live writes in user's DB | Stretch goal; would seal "Innovation" |
+
+What we **don't** do: pretend MCP can do things it can't (scheduling, change streams, multi-tenancy auth). We name those gaps in the README and show we built around them. Judges who write Mongo code will respect honesty more than overselling.
+
+---
+
+## Part 9 — Decision log (resolved · deferred · still open)
+
+### Resolved (logged in "Decisions Made" up top)
+- ✅ Positioning: horizontal
+- ✅ Team: full team locked
+- ✅ Codebase: fresh repo, Blaze as case-study context only
+- ✅ Onboarding flow: iterative preview (see §7.4)
+
+### Deferred by the user (revisit when implementation gets closer)
+- **Demo data** — synthetic. Build once insight modules exist and we know what shapes look good on cards.
+- **Opening insight hook for the demo** — defer until we have a working insight engine; the right opener may emerge from what *actually* looks impressive when the agent runs.
+
+### Still open (worth deciding before scaffolding)
+
+1. **Project name.** "Lens" is a placeholder. Alternatives: "Pulse" (lives-and-breathes feel), "Looking Glass," "Lookout," "Quill" (writes the insight), "Compass." Or something with "Mongo" in it for SEO inside the contest. Lean toward 1 syllable.
+
+2. **Closed-loop scope** (email-open → DB check → insight surfaces). Production-grade version needs Atlas Stream Processing — out of scope. A *polled* version every 5 min via MCP is doable and is genuinely novel. Default plan: promise the polled version, mention change-streams as v2 in the README. Confirm or push back.
+
+3. **Generative UI library spike.** Tambo is the recommendation (§6.2), but its MCP integration with `mongodb-mcp-server` specifically hasn't been verified by us. Need a D1 spike to confirm; fall back to a hand-rolled component-catalog if it fails. Decision needed: *do we commit to Tambo or hedge with a parallel hand-rolled prototype?*
+
+4. **Authentication for the live demo URL.** Devpost wants a hosted URL judges can poke. Options:
+    - (a) Public sandbox seeded with synthetic data — easiest.
+    - (b) Judges paste their own connection string — most impressive, security-fraught.
+    - (c) **Default-public-sandbox + "BYO connection string" behind a single-button "I understand the risks" gate** — recommended; best of both.
+
+5. **Pricing / who pays?** (Future-state.) Free for demo, but worth a paragraph in the README's "Potential Impact" section so judges can see the path to actual users. Per-MCP-subprocess minutes on Cloud Run + Gemini tokens per insight tick — ballpark a free tier and a paid tier.
+
+6. **Video direction.** Voiceover with smooth cuts outperforms talking-head on hackathons (per Devpost's own guidance). Need a script by D7. With a full team, this can be parallelized — someone on the team should own the video from D5.
+
+---
+
+## Part 10 — Risks and what would get us eliminated
+
+| Risk | How to avoid |
+|---|---|
+| **Submission disqualified for routing to Claude/OpenAI** | Audit every LLM call. Gemini-only. No Vercel AI Gateway → Claude. No fallback providers. |
+| **Submission disqualified for missing `LICENSE` file** | Add `LICENSE` (MIT or Apache-2.0) on Day 1, first commit. |
+| **Submission flagged for being a "modification of existing project"** | Brand new repo, brand new package name. Even if some code patterns echo Momentum, none of the files come from it. |
+| **Demo video over 3:00** | Time-box from script. Hard cut. |
+| **Tambo's MongoDB MCP integration doesn't work cleanly** | D1 spike. Fall back to AI Elements + a hand-rolled component registry if it fails. |
+| **`gemini-3-flash-preview` quota / rate limits during demo** | Have `gemini-3.5-flash` configured as fallback. Pre-warm the demo path. |
+| **Multi-tenant data leak in front of judges** | Subprocess-per-request + readOnly + readOnly DB user. Triple-locked door. Document it in README. |
+| **Schema sampling misses important fields** | Targeted `{$exists}` probes after initial schema call. Document the gap. |
+| **Insight cards feel random** | MDSF scoring + user north-star weighting + anti-staleness rule. Show your work in the README. |
+
+---
+
+## Appendix A — Key sources
+
+**Hackathon**
+- [Rapid Agent Hackathon (Devpost)](https://rapid-agent.devpost.com/)
+- [Hackathon Rules](https://rapid-agent.devpost.com/rules)
+- [MongoDB Resources page](https://rapid-agent.devpost.com/details/mongodb-resources)
+- [Devpost blog announcement](https://info.devpost.com/blog/google-cloud-rapid-agent-hackathon)
+
+**Google Cloud Agent Builder / ADK**
+- [Gemini Enterprise Agent Platform overview](https://cloud.google.com/products/gemini-enterprise-agent-platform)
+- [Agent Development Kit docs](https://docs.cloud.google.com/gemini-enterprise-agent-platform/build/adk)
+- [ADK MCP Tools docs](https://adk.dev/tools-custom/mcp-tools/)
+- [google/adk-docs MongoDB integration](https://github.com/google/adk-docs/blob/main/docs/integrations/mongodb.md)
+- [Gemini 3 Flash model card](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/3-flash)
+- [Get started with Gemini 3](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/start/get-started-with-gemini-3)
+- [Vertex model versions & lifecycle](https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions)
+
+**MongoDB MCP**
+- [mongodb-js/mongodb-mcp-server](https://github.com/mongodb-js/mongodb-mcp-server)
+- [MongoDB MCP Get Started](https://www.mongodb.com/docs/mcp-server/get-started/)
+- [MCP Server Tools docs](https://www.mongodb.com/docs/mcp-server/tools/)
+- [MCP Security Best Practices](https://www.mongodb.com/docs/mcp-server/security-best-practices/)
+- [Hands-On Implementation Guide (MongoDB blog)](https://medium.com/@MongoDB/mongodb-mcp-server-a-hands-on-implementation-guide-2826c3e8e58d)
+- [Smart Shopping Cart (MongoDB × Gemini × MCP Toolbox)](https://medium.com/mongodb/the-smart-shopping-cart-ai-agents-with-gemini-mongodb-atlas-vector-search-and-the-mcp-toolbox-7667b9e9805c)
+- [Real-Time Customer Retention reference architecture](https://www.mongodb.com/docs/atlas/architecture/current/solutions-library/customer-retention/)
+
+**Generative UI**
+- [Tambo](https://tambo.co/) / [Tambo docs](https://docs.tambo.co/)
+- [Vercel AI Elements](https://www.ai-elements.dev/) / [repo](https://github.com/vercel/ai-elements)
+- [Vercel AI SDK UI Generative UI](https://ai-sdk.dev/docs/ai-sdk-ui/generative-user-interfaces)
+- [Vercel json-render](https://json-render.dev/)
+- [harden-react-markdown (security)](https://github.com/vercel/harden-react-markdown)
+
+**Auto-insight prior art**
+- [Power BI Quick Insights](https://learn.microsoft.com/en-us/power-bi/create-reports/insights)
+- [Tableau Explain Data](https://help.tableau.com/current/online/en-us/explain_data_explained.htm)
+- [ThoughtSpot SpotIQ](https://docs.thoughtspot.com/cloud/latest/spotiq-custom)
+- [Amplitude Global Agent](https://amplitude.com/docs/amplitude-ai/global-agent-overview)
+- [Vanna AI](https://github.com/vanna-ai/vanna) + [accuracy paper](https://github.com/vanna-ai/vanna/blob/main/papers/ai-sql-accuracy-2023-08-17.md)
+
+**Academic**
+- [DeepAnalyze-8B (arXiv)](https://arxiv.org/html/2510.16872)
+- [AgentAda (arXiv)](https://arxiv.org/html/2504.07421)
+- [Data-to-Dashboard KDD 2025](https://arxiv.org/pdf/2505.23695)
+- [MDSF (arXiv)](https://arxiv.org/pdf/2501.01014)
+- [MaRGen (arXiv)](https://arxiv.org/pdf/2508.01370)
+
+Full citation index with credibility ratings is in the two sub-research files:
+- `/Users/hd/.claude/plans/i-want-you-to-effervescent-kazoo-agent-add16bb4d517b43ca.md` (hackathon + GCP)
+- `/Users/hd/.claude/plans/i-want-you-to-effervescent-kazoo-agent-a42900ee77b6f22cb.md` (MongoDB MCP + insight prior art + gen-UI)
+
+---
+
+## Appendix B — Blaze codebase evidence (the lived problem)
+
+For verification, the digest endpoint pain we described lives in:
+
+- **Route handler:** `~/Work/ai-persona-practice/backend/app/admin/router.py:436-442`
+- **Query builder `_build_daily_digest`:** same file, lines ~465–599 (9 separate queries)
+- **Slack formatter:** same file, lines ~849–903 (8 fixed sections)
+- **Slack bot stub (ready for agent-driven replacement):** `~/Work/ai-persona-practice/backend/app/slack/query_engine.py:34-41`
+- **User lifecycle schema:** `~/Work/ai-persona-practice/backend/app/models/user.py:17-87`
+- **Chat warmth schema:** `~/Work/ai-persona-practice/backend/app/models/chat.py:87-159`
+- **Message-level warmth deltas:** `~/Work/ai-persona-practice/backend/app/models/chat.py:38-80`
+- **Blaze Eval skill (manual diagnostic queries):** `~/.claude/skills/blaze-eval/SKILL.md:260-357`
+
+Reading these in order makes the case better than any pitch deck would.
+
+---
+
+*End of document. Awaiting discussion on the open questions in Part 9.*
