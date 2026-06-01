@@ -36,9 +36,7 @@ class MockMcpManager:
         *,
         timeout_s: float | None = None,
     ) -> dict:
-        self.calls.append(
-            {"tenant_id": tenant_id, "tool_name": tool_name, "args": args}
-        )
+        self.calls.append({"tenant_id": tenant_id, "tool_name": tool_name, "args": args})
         if tool_name in self.results:
             return self.results[tool_name]
         # Default: return an empty list wrapped in {"documents": []}
@@ -147,11 +145,13 @@ def client(wired_app):
 # ---------------------------------------------------------------------------
 
 
-def make_session_with_schema(
-    store: SessionStore, *, schema: dict | None = None
-) -> str:
+def make_session_with_schema(store: SessionStore, *, schema: dict | None = None) -> str:
     """Create a session with a sampled schema. Returns the token."""
 
-    return asyncio.get_event_loop().run_until_complete(
-        store.create("mongodb://test:test@localhost:27017/test")
-    ) if not schema else None
+    return (
+        asyncio.get_event_loop().run_until_complete(
+            store.create("mongodb://test:test@localhost:27017/test")
+        )
+        if not schema
+        else None
+    )

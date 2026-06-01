@@ -80,7 +80,9 @@ class RfmModule:
         fields = orders.get("sample_fields") or orders.get("fields") or []
         return any("amount" in str(f).lower() for f in fields)
 
-    def generate_pipeline(self, sampled_schema: dict[str, Any], params: dict[str, Any]) -> list[dict]:
+    def generate_pipeline(
+        self, sampled_schema: dict[str, Any], params: dict[str, Any]
+    ) -> list[dict]:
         return list(_RFM_PIPELINE)
 
     def render_card(self, result: list[dict], params: dict[str, Any]) -> CardDescriptor:

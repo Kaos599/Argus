@@ -198,9 +198,7 @@ def validate_pipeline(pipeline: Iterable[dict], *, max_stages: int = 50) -> list
         if _stage_name(stage) is None:
             raise GuardViolation(
                 code=ErrorCode.INVALID_INPUT,
-                message=(
-                    f"Stage at index {index} is not a valid MongoDB aggregation stage"
-                ),
+                message=(f"Stage at index {index} is not a valid MongoDB aggregation stage"),
                 technical_details=(
                     f"Each stage must be a single-key dict whose key starts with '$'. "
                     f"Got: {stage!r}"

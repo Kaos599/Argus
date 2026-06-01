@@ -156,9 +156,7 @@ class HeatmapCardProps(_CardModel):
     row_labels: list[str] = Field(..., min_length=2, max_length=20, alias="rowLabels")
     col_labels: list[str] = Field(..., min_length=2, max_length=20, alias="colLabels")
     values: list[list[float]]
-    color_scale: HeatmapColorScale = Field(
-        default=HeatmapColorScale.SEQUENTIAL, alias="colorScale"
-    )
+    color_scale: HeatmapColorScale = Field(default=HeatmapColorScale.SEQUENTIAL, alias="colorScale")
     color_domain: tuple[float, float] | None = Field(default=None, alias="colorDomain")
     cell_format: HeatmapCellFormat = Field(default=HeatmapCellFormat.COUNT, alias="cellFormat")
     show_row_labels: bool = Field(default=True, alias="showRowLabels")
@@ -228,7 +226,9 @@ class SummaryCardProps(_CardModel):
     title: str
     summary: str
     findings: list[SummaryFinding] = Field(default_factory=list, max_length=5)
-    suggested_actions: list[str] | None = Field(default=None, alias="suggestedActions", max_length=3)
+    suggested_actions: list[str] | None = Field(
+        default=None, alias="suggestedActions", max_length=3
+    )
     # related_card is a union of StatCardProps | TimeSeriesCardProps | BarChartCardProps
     # We use a permissive dict here; the renderer fills in the right shape.
     related_card: StatCardProps | TimeSeriesCardProps | BarChartCardProps | None = Field(
@@ -302,7 +302,9 @@ class CardDescriptor(BaseModel):
         Serializes the props model to a dict (preserving snake_case
         → camelCase aliases) and wraps it in the descriptor.
         """
-        return cls(component_name=card_name, props=props.model_dump(by_alias=True, exclude_none=False))
+        return cls(
+            component_name=card_name, props=props.model_dump(by_alias=True, exclude_none=False)
+        )
 
     @classmethod
     def error(
@@ -364,6 +366,14 @@ __all__ = [
 
 
 # A re-export so type checkers can pick up the union
-def _card_props_union() -> StatCardProps | TimeSeriesCardProps | BarChartCardProps | HeatmapCardProps | TableCardProps | SummaryCardProps | ErrorCardProps:  # pragma: no cover
+def _card_props_union() -> (
+    StatCardProps
+    | TimeSeriesCardProps
+    | BarChartCardProps
+    | HeatmapCardProps
+    | TableCardProps
+    | SummaryCardProps
+    | ErrorCardProps
+):  # pragma: no cover
     """Static type helper for the card props union."""
     raise NotImplementedError

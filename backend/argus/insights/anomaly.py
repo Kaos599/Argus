@@ -73,7 +73,9 @@ class AnomalyModule:
         fields = events.get("sample_fields") or events.get("fields") or []
         return any("user_id" in str(f) or "_id" in str(f) for f in fields)
 
-    def generate_pipeline(self, sampled_schema: dict[str, Any], params: dict[str, Any]) -> list[dict]:
+    def generate_pipeline(
+        self, sampled_schema: dict[str, Any], params: dict[str, Any]
+    ) -> list[dict]:
         return list(_ANOMALY_PIPELINE)
 
     def render_card(self, result: list[dict], params: dict[str, Any]) -> CardDescriptor:
@@ -128,11 +130,11 @@ class AnomalyModule:
             return CardDescriptor.from_card(CardName.TIME_SERIES_CARD, ts_props)
 
         # With anomalies, wrap in a SummaryCard.
-        summary_lines = [f"{len(anomalies)} anomalous day(s) in the trailing {trailing}-day window."]
+        summary_lines = [
+            f"{len(anomalies)} anomalous day(s) in the trailing {trailing}-day window."
+        ]
         for anom in anomalies[:3]:
-            summary_lines.append(
-                f"• {anom['t'][:10]}: DAU={anom['v']:.0f} (z={anom['z']:+.2f})"
-            )
+            summary_lines.append(f"• {anom['t'][:10]}: DAU={anom['v']:.0f} (z={anom['z']:+.2f})")
         findings: list[SummaryFinding] = []
         for anom in anomalies[:5]:
             severity = (

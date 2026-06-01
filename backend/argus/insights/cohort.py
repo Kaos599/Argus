@@ -42,9 +42,7 @@ _COHORT_PIPELINE: list[dict] = [
         "$group": {
             "_id": {
                 "user_id": "$user_id",
-                "cohort_week": {
-                    "$dateTrunc": {"date": "$user.signup_date", "unit": "week"}
-                },
+                "cohort_week": {"$dateTrunc": {"date": "$user.signup_date", "unit": "week"}},
             },
             "last_active": {"$max": "$timestamp"},
         }
@@ -106,7 +104,9 @@ class CohortModule:
         has_signup = any("signup" in str(f).lower() for f in user_fields)
         return has_event_type and has_user_id and has_signup
 
-    def generate_pipeline(self, sampled_schema: dict[str, Any], params: dict[str, Any]) -> list[dict]:
+    def generate_pipeline(
+        self, sampled_schema: dict[str, Any], params: dict[str, Any]
+    ) -> list[dict]:
         return list(_COHORT_PIPELINE)
 
     def render_card(self, result: list[dict], params: dict[str, Any]) -> CardDescriptor:

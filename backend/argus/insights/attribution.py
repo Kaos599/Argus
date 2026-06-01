@@ -56,7 +56,9 @@ class AttributionModule:
         fields = events.get("sample_fields") or events.get("fields") or []
         return any("channel" in str(f).lower() for f in fields)
 
-    def generate_pipeline(self, sampled_schema: dict[str, Any], params: dict[str, Any]) -> list[dict]:
+    def generate_pipeline(
+        self, sampled_schema: dict[str, Any], params: dict[str, Any]
+    ) -> list[dict]:
         return list(_ATTRIBUTION_PIPELINE)
 
     def render_card(self, result: list[dict], params: dict[str, Any]) -> CardDescriptor:

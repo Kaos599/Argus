@@ -31,7 +31,15 @@ RICH_SCHEMA: dict = {
     "users": {
         "name": "users",
         "doc_count": 1000,
-        "sample_fields": ["_id", "email", "signup_date", "country", "activated", "first_purchase_amount", "first_purchase_at"],
+        "sample_fields": [
+            "_id",
+            "email",
+            "signup_date",
+            "country",
+            "activated",
+            "first_purchase_amount",
+            "first_purchase_at",
+        ],
     },
     "orders": {
         "name": "orders",
@@ -91,7 +99,10 @@ class TestCanRun:
         assert FunnelModule().can_run(RICH_SCHEMA)
 
     def test_funnel_without_country(self) -> None:
-        schema = {**RICH_SCHEMA, "users": {**RICH_SCHEMA["users"], "sample_fields": ["_id", "email"]}}
+        schema = {
+            **RICH_SCHEMA,
+            "users": {**RICH_SCHEMA["users"], "sample_fields": ["_id", "email"]},
+        }
         # Without country, the funnel can't be sure it has the right fields.
         assert not FunnelModule().can_run(schema)
 
@@ -115,7 +126,10 @@ class TestCanRun:
     def test_attribution_without_channel(self) -> None:
         schema = {
             **RICH_SCHEMA,
-            "events": {**RICH_SCHEMA["events"], "sample_fields": ["_id", "user_id", "event_type", "timestamp"]},
+            "events": {
+                **RICH_SCHEMA["events"],
+                "sample_fields": ["_id", "user_id", "event_type", "timestamp"],
+            },
         }
         assert not AttributionModule().can_run(schema)
 
@@ -260,7 +274,9 @@ class TestRenderCard:
         """Smoke test: each module returns a CardDescriptor for a
         representative result."""
         cases = {
-            ModuleName.FUNNEL: [{"signups": [{"count": 10}], "activations": [], "revenue": [], "by_country": []}],
+            ModuleName.FUNNEL: [
+                {"signups": [{"count": 10}], "activations": [], "revenue": [], "by_country": []}
+            ],
             ModuleName.COHORT: [{"_id": 0, "user_count": 5}],
             ModuleName.RFM: [{"_id": [0, 50], "bucket_range": "0-50", "user_count": 5}],
             ModuleName.ATTRIBUTION: [{"_id": "organic", "user_count": 5}],

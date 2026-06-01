@@ -188,8 +188,7 @@ class McpSubprocess:
             # the message; the caller decides whether to retry.
             err = data["error"]
             raise RuntimeError(
-                f"MCP error from {tool_name}: code={err.get('code')} "
-                f"message={err.get('message')}"
+                f"MCP error from {tool_name}: code={err.get('code')} message={err.get('message')}"
             )
 
         return data.get("result", {})

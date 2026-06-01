@@ -82,7 +82,9 @@ async def plan(
         module_name = _coerce_module_name(step.get("module"))
         if module_name is None or module_name not in request.modules:
             continue
-        collection = step.get("collection") or (request.collections[0] if request.collections else None)
+        collection = step.get("collection") or (
+            request.collections[0] if request.collections else None
+        )
         if not collection:
             continue
         params = step.get("params") or {}
