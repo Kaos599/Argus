@@ -38,25 +38,12 @@ ENV PATH="/opt/venv/bin:${PATH}"
 
 # Copy the project metadata and install Python deps.
 COPY pyproject.toml ./
-RUN pip install --upgrade pip \
-    && pip install \
-        "fastapi>=0.115" \
-        "uvicorn[standard]>=0.32" \
-        "pydantic>=2.10" \
-        "pydantic-settings>=2.7" \
-        "httpx>=0.28" \
-        "python-dotenv>=1.0" \
-        "pyyaml>=6.0" \
-        "orjson>=3.10" \
-        "google-generativeai>=0.8" \
-        "pytest>=8.3" \
-        "pytest-asyncio>=0.25" \
-        "respx>=0.22" \
-        "ruff>=0.8"
+RUN pip install --upgrade pip
 
 # Copy the rest of the source and install the project itself.
+# This reads the runtime dependency list from ``[project.dependencies]``
+# in pyproject.toml — never hardcode versions here.
 COPY argus ./argus
-COPY tests ./tests
 RUN pip install --no-deps .
 
 # ---------------------------------------------------------------------------

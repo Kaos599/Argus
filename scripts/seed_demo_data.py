@@ -39,6 +39,20 @@ except ImportError as exc:
     )
     raise SystemExit(1) from exc
 
+try:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+    from argus.guard.result_set_guard import redact_connection_string
+except ImportError:
+    def redact_connection_string(text: str) -> str:  # type: ignore[misc]
+        """Fallback redaction: drop userinfo from any mongodb URI in ``text``."""
+        import re
+
+        return re.sub(
+            r"(mongodb(?:\+srv)?://)([^@\s]+)@",
+            r"\1***@",
+            text,
+        )
+
 
 COUNTRIES = ["US", "IN", "GB", "DE", "BR", "JP", "CA", "AU", "FR", "SG"]
 PLANS = ["free", "pro", "team", "enterprise"]
@@ -125,7 +139,7 @@ def main() -> int:
 
     rng = random.Random(args.seed)
     start = datetime.now(timezone.utc) - timedelta(days=180)
-    print(f"connecting to {args.connection_string[:40]}...")
+    print(f"connecting to {redact_connection_string(args.connection_string)}...")
 
     try:
         client: MongoClient = MongoClient(args.connection_string, serverSelectionTimeoutMS=10000)
@@ -205,7 +219,7 @@ def main() -> int:
     print(f"  total : {total:.2f}s")
     print()
     print("now point Argus at this cluster:")
-    print(f"  {args.connection_string}")
+    print(f"  {redact_connection_string(args.connection_string)}")
     print("=" * 60)
     return 0
 

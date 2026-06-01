@@ -26,6 +26,7 @@ dev = [
     "ruff>=0.7.0",
     "httpx>=0.28.0",
     "respx>=0.21.0",
+    "pymongo>=4.6.0",
 ]
 
 [project.scripts]

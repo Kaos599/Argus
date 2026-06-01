@@ -102,11 +102,13 @@ export function SummaryCard({
         <div className="mt-4 border-t border-argus-border pt-3">
           <CardRenderer
             descriptor={
-              "title" in relatedCard
+              Array.isArray((relatedCard as { series?: unknown }).series)
                 ? { componentName: "TimeSeriesCard", props: relatedCard as never }
-                : "label" in relatedCard
-                  ? { componentName: "StatCard", props: relatedCard as never }
-                  : { componentName: "BarChartCard", props: relatedCard as never }
+                : Array.isArray((relatedCard as { bars?: unknown }).bars)
+                  ? { componentName: "BarChartCard", props: relatedCard as never }
+                  : "label" in relatedCard
+                    ? { componentName: "StatCard", props: relatedCard as never }
+                    : { componentName: "ErrorCard", props: relatedCard as never }
             }
           />
         </div>

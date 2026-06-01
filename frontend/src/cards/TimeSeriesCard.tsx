@@ -4,6 +4,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -139,12 +140,9 @@ export function TimeSeriesCard({
                   const point = data.find((d) => d.t === ts);
                   if (!point) return null;
                   return (
-                    <line
+                    <ReferenceLine
                       key={`${name}-${ts}`}
-                      x1={ts}
-                      x2={ts}
-                      y1={0}
-                      y2={"100%"}
+                      x={ts}
                       stroke="var(--argus-danger)"
                       strokeWidth={1}
                       strokeDasharray="2 2"

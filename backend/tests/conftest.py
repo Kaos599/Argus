@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import pytest
@@ -138,20 +137,3 @@ def client(wired_app):
 
     with TestClient(app) as c:
         yield c
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def make_session_with_schema(store: SessionStore, *, schema: dict | None = None) -> str:
-    """Create a session with a sampled schema. Returns the token."""
-
-    return (
-        asyncio.get_event_loop().run_until_complete(
-            store.create("mongodb://test:test@localhost:27017/test")
-        )
-        if not schema
-        else None
-    )
