@@ -1,0 +1,45 @@
+name: funnel
+description: >
+  Multi-metric cohort analysis using a single $facet aggregation. Returns
+  signups, activations, revenue, and top-10 country counts in one
+  round-trip. Use this module when the user asks about conversion
+  performance, top-line metrics, or geographic distribution.
+required_collections:
+  - users
+  - orders
+  - events
+parameters:
+  lookback_days:
+    type: integer
+    default: 7
+    description: Days back from "now" to consider.
+  revenue_field:
+    type: string
+    default: first_purchase_amount
+  signup_date_field:
+    type: string
+    default: signup_date
+  activated_field:
+    type: string
+    default: activated
+  country_field:
+    type: string
+    default: country
+output_card: StatCard + BarChartCard (3 KPI tiles + 1 bar chart)
+mql_template: |
+  [
+    {"$match": {"<signup_date_field>": {"$gte": {"$dateSubtract": {"startDate": "$$NOW", "unit": "day", "amount": <lookback_days>}}}}}},
+    {"$facet": {
+      "signups":     [{"$count": "count"}],
+      "activations": [{"$match": {"<activated_field>": true}}, {"$count": "count"}],
+      "revenue":     [{"$match": {"first_purchase_at": {"$exists": true}}}, {"$group": {"_id": null, "total": {"$sum": "$<revenue_field>"}}}],
+      "by_country":  [{"$group": {"_id": "$<country_field>", "count": {"$sum": 1}}}, {"$sort": {"count": -1}}, {"$limit": 10}]
+    }}
+  ]
+example_result: |
+  [{
+    "signups":     [{"count": 47}],
+    "activations": [{"count": 31}],
+    "revenue":     [{"_id": null, "total": 12847.50}],
+    "by_country":  [{"_id": "US", "count": 22}, {"_id": "DE", "count": 8}]
+  }]

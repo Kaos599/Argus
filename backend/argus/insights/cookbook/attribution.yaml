@@ -1,0 +1,32 @@
+name: attribution
+description: >
+  First-touch attribution. For each user, we find the first event in the
+  events collection (typically a 'signup' or 'landing' event) and
+  attribute them to the channel/source on that event. The output is a
+  bar chart of users by first-touch channel. v1 is first-touch only;
+  Markov + Shapley are v2.
+required_collections:
+  - events
+parameters:
+  event_types:
+    type: array
+    default: ["signup", "landing"]
+  channel_field:
+    type: string
+    default: channel
+output_card: BarChartCard (top channels by attributed users)
+mql_template: |
+  [
+    {"$match": {"event_type": {"$in": <event_types>}}},
+    {"$sort": {"timestamp": 1}},
+    {"$group": {"_id": "$user_id", "first_channel": {"$first": "$<channel_field>"}, "first_event_at": {"$first": "$timestamp"}}},
+    {"$group": {"_id": "$first_channel", "user_count": {"$sum": 1}, "earliest": {"$min": "$first_event_at"}}},
+    {"$sort": {"user_count": -1}},
+    {"$limit": 10}
+  ]
+example_result: |
+  [
+    {"_id": "organic_search", "user_count": 412, "earliest": "2026-01-15T00:00:00Z"},
+    {"_id": "paid_social",    "user_count": 287, "earliest": "2026-01-15T00:00:00Z"},
+    {"_id": "referral",       "user_count":  94, "earliest": "2026-01-15T00:00:00Z"}
+  ]
