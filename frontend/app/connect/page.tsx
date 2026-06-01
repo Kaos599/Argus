@@ -70,6 +70,7 @@ export default function ConnectPage() {
         message: err instanceof Error ? err.message : "Unknown error",
         isRetryable: true,
         isReadOnlyViolation: false,
+        isFullPage: false,
         guidance: "Check that the connection string is correct and the cluster is reachable.",
       });
     }
@@ -185,6 +186,7 @@ export default function ConnectPage() {
               guidance={error.guidance}
               isReadOnlyViolation={error.isReadOnlyViolation}
               isRetryable={error.isRetryable}
+              isFullPage={false}
             />
           )}
         </form>
