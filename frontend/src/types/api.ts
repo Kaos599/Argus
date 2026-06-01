@@ -34,7 +34,7 @@ export {
   HealthResponse,
   ErrorCode,
   ErrorResponse,
-} from "../../../shared/api-types";
+} from "@/shared/api-types";
 
 export type {
   StatCardPropsType,
@@ -64,4 +64,4 @@ export type {
   HealthResponseType,
   ErrorCodeType,
   ErrorResponseType,
-} from "../../../shared/api-types";
+} from "@/shared/api-types";
