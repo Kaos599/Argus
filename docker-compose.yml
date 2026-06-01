@@ -1,0 +1,75 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: argus-mongo
+    ports:
+      - "${ARGUS_MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  seed:
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile
+    container_name: argus-seed
+    environment:
+      - ARGUS_DEMO_CONNECTION_STRING=mongodb://mongo:27017/argus_demo
+      - ARGUS_DEMO_USERS=${ARGUS_DEMO_USERS:-1000}
+      - ARGUS_DEMO_EVENTS=${ARGUS_DEMO_EVENTS:-50000}
+      - ARGUS_DEMO_ORDERS=${ARGUS_DEMO_ORDERS:-5000}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: argus-backend
+    ports:
+      - "${ARGUS_BACKEND_PORT:-8080}:8080"
+    environment:
+      - ARGUS_PORT=8080
+      - ARGUS_MAX_MCP_SUBPROCESSES=${ARGUS_MAX_MCP_SUBPROCESSES:-10}
+      - ARGUS_MCP_IDLE_TIMEOUT_S=${ARGUS_MCP_IDLE_TIMEOUT_S:-300}
+      - ARGUS_MCP_STARTUP_TIMEOUT_S=${ARGUS_MCP_STARTUP_TIMEOUT_S:-5}
+      - ARGUS_LOG_LEVEL=${ARGUS_LOG_LEVEL:-INFO}
+      - ARGUS_CORS_ORIGINS=${ARGUS_CORS_ORIGINS:-http://localhost:3000}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ARGUS_LLM_MODEL_PRIMARY=${ARGUS_LLM_MODEL_PRIMARY:-gemini-3-flash-preview}
+      - ARGUS_LLM_MODEL_FALLBACK=${ARGUS_LLM_MODEL_FALLBACK:-gemini-2.5-flash}
+      - ARGUS_LLM_MODEL_LAST_RESORT=${ARGUS_LLM_MODEL_LAST_RESORT:-gemini-2.5-flash-lite}
+      - ARGUS_EMBEDDING_MODEL=${ARGUS_EMBEDDING_MODEL:-gemini-embedding-2}
+      - MONGODB_MCP_SERVER_VERSION=${MONGODB_MCP_SERVER_VERSION:-1.2.3}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: argus-frontend
+    ports:
+      - "${ARGUS_FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://backend:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  mongo-data:

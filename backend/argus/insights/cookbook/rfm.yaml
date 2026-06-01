@@ -1,0 +1,37 @@
+name: rfm
+description: >
+  Revenue segmentation using $bucket. Groups users into 5 fixed revenue
+  buckets and computes user count, total revenue, and avg orders per
+  user per bucket. Use this when the user asks "who are my top spenders"
+  or "how is revenue distributed".
+required_collections:
+  - orders
+parameters:
+  lookback_months:
+    type: integer
+    default: 6
+  order_status:
+    type: string
+    default: completed
+  amount_field:
+    type: string
+    default: amount
+  bucket_boundaries:
+    type: array
+    default: [0, 50, 200, 500, 1000, 100000]
+output_card: BarChartCard (5 buckets) + SummaryCard
+mql_template: |
+  [
+    {"$match": {"status": "<order_status>", "created_at": {"$gte": {"$dateSubtract": {"startDate": "$$NOW", "unit": "month", "amount": <lookback_months>}}}}}},
+    {"$group": {"_id": "$user_id", "total_spend": {"$sum": "$<amount_field>"}, "order_count": {"$sum": 1}, "last_order": {"$max": "$created_at"}}},
+    {"$bucket": {"groupBy": "$total_spend", "boundaries": <bucket_boundaries>, "default": "other", "output": {"user_count": {"$sum": 1}, "total_revenue": {"$sum": "$total_spend"}, "avg_orders_per_user": {"$avg": "$order_count"}}}},
+    {"$project": {"bucket": {"$concat": [{"$toString": {"$arrayElemAt": ["$_id", 0]}}, "-", {"$toString": {"$arrayElemAt": ["$_id", 1]}}]}, "user_count": 1, "total_revenue": 1, "avg_orders_per_user": {"$round": ["$avg_orders_per_user", 2]}}}
+  ]
+example_result: |
+  [
+    {"bucket": "0-50",      "user_count": 423, "total_revenue": 8742.30,  "avg_orders_per_user": 1.4},
+    {"bucket": "50-200",    "user_count": 187, "total_revenue": 19834.20, "avg_orders_per_user": 2.1},
+    {"bucket": "200-500",   "user_count":  64, "total_revenue": 21789.50, "avg_orders_per_user": 3.4},
+    {"bucket": "500-1000",  "user_count":  21, "total_revenue": 14832.00, "avg_orders_per_user": 5.2},
+    {"bucket": "1000-100000", "user_count":  8, "total_revenue": 19284.10, "avg_orders_per_user": 8.7}
+  ]

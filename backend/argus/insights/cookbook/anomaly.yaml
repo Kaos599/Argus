@@ -1,0 +1,35 @@
+name: anomaly
+description: >
+  Z-score anomaly detection on a daily metric. We compute the trailing
+  28-day rolling mean and standard deviation with $setWindowFields,
+  then flag days where the metric's z-score exceeds a threshold.
+  v1: a single metric (default: daily active users). v2: multi-metric.
+required_collections:
+  - events
+parameters:
+  metric:
+    type: string
+    default: dau
+    description: One of "dau" (distinct users per day), "event_count", or "revenue".
+  lookback_days:
+    type: integer
+    default: 56
+  z_threshold:
+    type: number
+    default: 2.5
+  trailing_window_days:
+    type: integer
+    default: 28
+output_card: TimeSeriesCard (with showAnomalies=true) + SummaryCard
+mql_template: |
+  [
+    {"$match": {"timestamp": {"$gte": {"$dateSubtract": {"startDate": "$$NOW", "unit": "day", "amount": <lookback_days>}}}}},
+    {"$group": {"_id": {"$dateTrunc": {"date": "$timestamp", "unit": "day"}}, "users": {"$addToSet": "$user_id"}, "event_count": {"$sum": 1}}},
+    {"$project": {"date": "$_id", "value": {"$cond": [{"$eq": ["<metric>", "dau"]}, {"$size": "$users"}, {"$cond": [{"$eq": ["<metric>", "revenue"]}, "$event_count", "$event_count"]}]}}},
+    {"$sort": {"date": 1}},
+    {"$setWindowFields": {"sortBy": {"date": 1}, "output": {"trailing_mean": {"$avg": {"$sum": []}}}, "trailing_std": {"$stdDevSamp": {"$sum": []}}}}}
+  ]
+notes:
+  - The $setWindowFields stage in this template is a sketch; the actual
+    v1 implementation uses a simpler $facet with mean/std computed
+    inline, then a join.
