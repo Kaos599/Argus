@@ -47,7 +47,14 @@ jobs:
       - name: Test (pytest)
         run: pytest -v --tb=short
       - name: Import smoke test
-        run: python -c "from argus.main import app; routes=[r.path for r in app.routes if hasattr(r,'path')]; api=[r for r in routes if r.startswith('/api/v1/')]; assert len(api)>=11, f'expected >=11 API routes, got {len(api)}: {api}'; print(f'OK: {len(api)} API routes registered')"
+        run: |
+          python -c "
+          from argus.main import app
+          routes = [r.path for r in app.routes if hasattr(r, 'path')]
+          api = [r for r in routes if r.startswith('/api/v1/')]
+          assert len(api) >= 11, f'expected at least 11 API routes, got {len(api)}: {api}'
+          print(f'OK: {len(api)} API routes registered')
+          "
 
   frontend:
     name: frontend (lint + tests + build)
