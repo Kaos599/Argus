@@ -105,6 +105,7 @@ export const ErrorCardProps = z.object({
   technicalDetails: z.string().optional(),
   isRetryable: z.boolean().default(true),
   isReadOnlyViolation: z.boolean().default(false),
+  isFullPage: z.boolean().default(false),
   guidance: z.string().optional(),
 });
 

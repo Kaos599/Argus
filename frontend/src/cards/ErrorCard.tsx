@@ -43,6 +43,7 @@ export function ErrorCard({
   technicalDetails,
   isRetryable = true,
   isReadOnlyViolation = false,
+  isFullPage = false,
   guidance,
 }: ErrorCardPropsType) {
   const [expanded, setExpanded] = useState(false);
@@ -51,12 +52,22 @@ export function ErrorCard({
   if (dismissed) return null;
 
   const isReadOnly = isReadOnlyViolation;
+  const isFullPageActive = isFullPage && isReadOnlyViolation;
   const severity: "error" | "warning" = isReadOnly ? "error" : "error";
 
   return (
+    <div
+      data-testid="error-card-root"
+      data-full-page={isFullPageActive ? "true" : undefined}
+      className={cn(
+        isFullPageActive &&
+          "flex min-h-[calc(100vh-8rem)] w-full items-center justify-center",
+      )}
+    >
     <Card
       surface="transparent"
       className={cn(
+        isFullPageActive && "max-w-2xl",
         "border",
         severity === "error"
           ? "border-argus-danger bg-argus-danger-bg/30 dark:bg-argus-danger-bg/20"
@@ -174,5 +185,6 @@ export function ErrorCard({
         </p>
       )}
     </Card>
+    </div>
   );
 }
