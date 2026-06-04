@@ -1,0 +1,32 @@
+name: cohort
+description: >
+  7-day rolling retention by acquisition cohort using $setWindowFields.
+  The output is a heatmap-friendly shape: rows = days since signup,
+  cells = active user count.
+required_collections:
+  - events
+  - users
+parameters:
+  lookback_days:
+    type: integer
+    default: 84
+  event_types:
+    type: array
+    default: ["app_open", "session_start"]
+  cohort_period:
+    type: string
+    default: week
+  bucket_boundaries:
+    type: array
+    default: [0, 1, 7, 14, 30, 60, 90]
+output_card: HeatmapCard (acquisition week × days since signup)
+mql_template: |
+  [
+    {"$match": {"event_type": {"$in": <event_types>}, "timestamp": {"$gte": {"$dateSubtract": {"startDate": "$$NOW", "unit": "day", "amount": <lookback_days>}}}}}},
+    {"$lookup": {"from": "users", "localField": "user_id", "foreignField": "_id", "as": "user"}},
+    {"$unwind": "$user"},
+    {"$group": {"_id": {"user_id": "$user_id", "cohort_week": {"$dateTrunc": {"date": "$user.signup_date", "unit": "<cohort_period>"}}}, "last_active": {"$max": "$timestamp"}}},
+    {"$setWindowFields": {"partitionBy": "$_id.cohort_week", "sortBy": {"last_active": 1}, "output": {"days_since_signup": {"$dateDiff": {"startDate": "$_id.cohort_week", "endDate": "$last_active", "unit": "day"}}}}},
+    {"$bucket": {"groupBy": "$days_since_signup", "boundaries": <bucket_boundaries>, "default": "90+", "output": {"user_count": {"$sum": 1}, "cohorts": {"$addToSet": "$_id.cohort_week"}}}},
+    {"$project": {"days_since_signup": "$_id", "user_count": 1, "cohort_count": {"$size": "$cohorts"}}}
+  ]
