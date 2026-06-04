@@ -4,7 +4,7 @@
 # Stage 2: runtime — slim image with the venv + mongodb-mcp-server binary.
 
 ARG PYTHON_VERSION=3.12
-ARG MCP_SERVER_VERSION=1.2.3
+ARG MCP_SERVER_VERSION=1.1.0
 
 # ---------------------------------------------------------------------------
 # Stage 1: builder
@@ -38,13 +38,14 @@ ENV PATH="/opt/venv/bin:${PATH}"
 
 # Copy the project metadata and install Python deps.
 COPY pyproject.toml ./
+COPY README.md ./
 RUN pip install --upgrade pip
 
 # Copy the rest of the source and install the project itself.
 # This reads the runtime dependency list from ``[project.dependencies]``
 # in pyproject.toml — never hardcode versions here.
 COPY argus ./argus
-RUN pip install --no-deps .
+RUN pip install .
 
 # ---------------------------------------------------------------------------
 # Stage 2: runtime

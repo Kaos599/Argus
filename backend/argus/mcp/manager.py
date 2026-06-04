@@ -202,32 +202,32 @@ class McpManager:
                 logger.info("evicting LRU subprocess tenant=%s", lru_id)
                 await self._kill_locked(lru_id)
 
-            # Spawn outside the lock to avoid holding it during the
-            # subprocess exec. Re-acquire to register.
-            async with self._lock:
-                # Re-check after re-acquiring (a concurrent caller may
-                # have spawned in the meantime).
-                existing = self._subprocesses.get(tenant_id)
-                if existing is not None and existing.is_alive():
+        # Spawn outside the lock to avoid holding it during the subprocess exec.
+        sub = await spawn_subprocess(
+            tenant_id,
+            connection_string,
+            port_allocator=self._port_allocator,
+        )
+
+        async with self._lock:
+            existing = self._subprocesses.get(tenant_id)
+            if existing is not None:
+                if existing.is_alive():
+                    await sub.kill()
+                    existing.touch()
                     return existing
-                if existing is not None:
-                    await self._kill_locked(tenant_id)
+                await self._kill_locked(tenant_id)
 
-                if len(self._subprocesses) >= self._max:
-                    lru_id = min(
-                        self._subprocesses.keys(),
-                        key=lambda k: self._subprocesses[k].last_used,
-                    )
-                    await self._kill_locked(lru_id)
-
-                sub = await spawn_subprocess(
-                    tenant_id,
-                    connection_string,
-                    port_allocator=self._port_allocator,
+            if len(self._subprocesses) >= self._max:
+                lru_id = min(
+                    self._subprocesses.keys(),
+                    key=lambda k: self._subprocesses[k].last_used,
                 )
-                self._subprocesses[tenant_id] = sub
-                logger.info("spawned subprocess tenant=%s port=%d", tenant_id, sub.port)
-                return sub
+                await self._kill_locked(lru_id)
+
+            self._subprocesses[tenant_id] = sub
+            logger.info("spawned subprocess tenant=%s port=%d", tenant_id, sub.port)
+            return sub
 
     async def _kill(self, tenant_id: str) -> None:
         async with self._lock:

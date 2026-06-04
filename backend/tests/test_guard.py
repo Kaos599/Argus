@@ -185,6 +185,23 @@ class TestEnforceLimit:
 
 
 class TestGuardToolCall:
+    def test_passes_through_list_collections_args(self) -> None:
+        args = {"database": "vedai"}
+        out = guard_tool_call("mongodb_list_collections", args, max_documents=100)
+        assert out == args
+        assert out is not args
+
+    def test_passes_through_collection_schema_args(self) -> None:
+        args = {"database": "vedai", "collection": "users"}
+        out = guard_tool_call("mongodb_collection_schema", args, max_documents=100)
+        assert out == args
+        assert out is not args
+
+    def test_rejects_unknown_tool(self) -> None:
+        with pytest.raises(GuardViolation) as exc:
+            guard_tool_call("mongodb_drop_database", {}, max_documents=100)
+        assert exc.value.code == ErrorCode.INVALID_INPUT
+
     def test_combines_pipeline_validation_and_limit(self) -> None:
         args = {
             "operation": "aggregate",
