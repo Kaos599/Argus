@@ -75,6 +75,18 @@ async def sample(
             if not isinstance(fields, list):
                 fields = []
             doc_count = schema_result.get("doc_count")
+            if not doc_count:
+                try:
+                    count_args = {"collection": name, "pipeline": [{"$count": "count"}]}
+                    if database:
+                        count_args["database"] = database
+                    count_result = await mcp.call_tool(token, "mongodb_aggregate", count_args)
+                    docs = count_result.get("documents")
+                    if docs and isinstance(docs, list) and isinstance(docs[0], dict) and "count" in docs[0]:
+                        doc_count = docs[0]["count"]
+                except Exception:
+                    pass
+
             samples.append(
                 CollectionSample(
                     name=name,

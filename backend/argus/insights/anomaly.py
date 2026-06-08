@@ -37,8 +37,11 @@ from argus.models.card import (
 _ANOMALY_PIPELINE: list[dict] = [
     {
         "$match": {
-            "timestamp": {
-                "$gte": {"$dateSubtract": {"startDate": "$$NOW", "unit": "day", "amount": 56}}
+            "$expr": {
+                "$gte": [
+                    "$timestamp",
+                    {"$dateSubtract": {"startDate": "$$NOW", "unit": "day", "amount": 56}}
+                ]
             }
         }
     },

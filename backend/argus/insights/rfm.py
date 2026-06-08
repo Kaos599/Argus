@@ -25,9 +25,12 @@ _RFM_PIPELINE: list[dict] = [
     {
         "$match": {
             "status": "completed",
-            "created_at": {
-                "$gte": {"$dateSubtract": {"startDate": "$$NOW", "unit": "month", "amount": 6}}
-            },
+            "$expr": {
+                "$gte": [
+                    "$created_at",
+                    {"$dateSubtract": {"startDate": "$$NOW", "unit": "month", "amount": 6}}
+                ]
+            }
         }
     },
     {
@@ -53,11 +56,16 @@ _RFM_PIPELINE: list[dict] = [
     {
         "$project": {
             "bucket_range": {
-                "$concat": [
-                    {"$toString": {"$arrayElemAt": ["$_id", 0]}},
-                    "-",
-                    {"$toString": {"$arrayElemAt": ["$_id", 1]}},
-                ]
+                "$switch": {
+                    "branches": [
+                        {"case": {"$eq": ["$_id", 0]}, "then": "0-50"},
+                        {"case": {"$eq": ["$_id", 50]}, "then": "50-200"},
+                        {"case": {"$eq": ["$_id", 200]}, "then": "200-500"},
+                        {"case": {"$eq": ["$_id", 500]}, "then": "500-1000"},
+                        {"case": {"$eq": ["$_id", 1000]}, "then": "1000+"}
+                    ],
+                    "default": "other"
+                }
             },
             "user_count": 1,
             "total_revenue": 1,

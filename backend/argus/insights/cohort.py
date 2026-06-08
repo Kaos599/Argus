@@ -24,9 +24,12 @@ _COHORT_PIPELINE: list[dict] = [
     {
         "$match": {
             "event_type": {"$in": ["app_open", "session_start"]},
-            "timestamp": {
-                "$gte": {"$dateSubtract": {"startDate": "$$NOW", "unit": "day", "amount": 84}}
-            },
+            "$expr": {
+                "$gte": [
+                    "$timestamp",
+                    {"$dateSubtract": {"startDate": "$$NOW", "unit": "day", "amount": 84}}
+                ]
+            }
         }
     },
     {
@@ -48,18 +51,14 @@ _COHORT_PIPELINE: list[dict] = [
         }
     },
     {
-        "$setWindowFields": {
-            "partitionBy": "$_id.cohort_week",
-            "sortBy": {"last_active": 1},
-            "output": {
-                "days_since_signup": {
-                    "$dateDiff": {
-                        "startDate": "$_id.cohort_week",
-                        "endDate": "$last_active",
-                        "unit": "day",
-                    }
+        "$addFields": {
+            "days_since_signup": {
+                "$dateDiff": {
+                    "startDate": "$_id.cohort_week",
+                    "endDate": "$last_active",
+                    "unit": "day",
                 }
-            },
+            }
         }
     },
     {

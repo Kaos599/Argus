@@ -209,9 +209,7 @@ RenderEventName = Literal["progress", "card", "error", "done"]
 
 
 class LayoutItem(BaseModel):
-    """One item in a react-grid-layout — index + position + size."""
-
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     i: str
     x: int = Field(..., ge=0)

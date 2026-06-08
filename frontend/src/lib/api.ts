@@ -209,12 +209,16 @@ export async function* renderStream(
     const parts = buffer.split("\n\n");
     buffer = parts.pop() ?? "";
     for (const part of parts) {
+      const eventLine = part.split("\n").find((l) => l.startsWith("event:"));
+      const eventName = eventLine ? eventLine.slice(6).trim() : undefined;
       const line = part.split("\n").find((l) => l.startsWith("data:"));
       if (!line) continue;
       const json = line.slice(5).trim();
       try {
-        const ev = JSON.parse(json) as RenderEventType;
-        yield ev;
+        const dataPayload = JSON.parse(json);
+        if (eventName) {
+          yield { event: eventName, data: dataPayload } as RenderEventType;
+        }
       } catch {
         // ignore malformed events
       }

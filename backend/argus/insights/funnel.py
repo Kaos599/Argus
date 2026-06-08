@@ -33,8 +33,11 @@ from argus.models.card import (
 _FUNNEL_PIPELINE: list[dict] = [
     {
         "$match": {
-            "signup_date": {
-                "$gte": {"$dateSubtract": {"startDate": "$$NOW", "unit": "day", "amount": 7}}
+            "$expr": {
+                "$gte": [
+                    "$signup_date",
+                    {"$dateSubtract": {"startDate": "$$NOW", "unit": "day", "amount": 7}}
+                ]
             }
         }
     },
