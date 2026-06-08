@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from argus.insights.base import get_collection
 from argus.models.api_types import ModuleName
 from argus.models.card import (
     BarChartBar,
@@ -50,7 +51,7 @@ class AttributionModule:
     required_collections = ["events"]
 
     def can_run(self, sampled_schema: dict[str, Any]) -> bool:
-        events = _get_collection(sampled_schema, "events")
+        events = get_collection(sampled_schema, "events")
         if not events:
             return False
         fields = events.get("sample_fields") or events.get("fields") or []
@@ -83,15 +84,6 @@ class AttributionModule:
             show_values=True,
         )
         return CardDescriptor.from_card(CardName.BAR_CHART_CARD, props)
-
-
-def _get_collection(schema: dict[str, Any], name: str) -> dict[str, Any] | None:
-    if name in schema and isinstance(schema[name], dict):
-        return schema[name]
-    collections = schema.get("collections")
-    if isinstance(collections, dict) and name in collections:
-        return collections[name]
-    return None
 
 
 __all__ = ["AttributionModule"]

@@ -121,6 +121,32 @@ class TestSample:
             assert "doc_count" in coll
             assert "sample_fields" in coll
 
+        session = _deps()._session_store._sessions[token]
+        assert session.sampled_schema["collections"] == [
+            {
+                "name": "users",
+                "doc_count": 1000,
+                "sample_fields": ["_id", "user_id", "timestamp", "event_type"],
+            },
+            {
+                "name": "events",
+                "doc_count": 1000,
+                "sample_fields": ["_id", "user_id", "timestamp", "event_type"],
+            },
+            {
+                "name": "orders",
+                "doc_count": 1000,
+                "sample_fields": ["_id", "user_id", "timestamp", "event_type"],
+            },
+        ]
+        assert session.sampled_schema["users"]["doc_count"] == 1000
+        assert session.sampled_schema["users"]["sample_fields"] == [
+            "_id",
+            "user_id",
+            "timestamp",
+            "event_type",
+        ]
+
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/plan
@@ -160,6 +186,48 @@ class TestPlan:
             assert "mql_pipeline" in step
             assert len(step["mql_pipeline"]) > 0
 
+    def test_plan_uses_sampled_schema_by_collection_name(self, client) -> None:
+        create = client.post(
+            "/api/v1/connect",
+            json={"connection_string": "mongodb://u:p@host:27017/db"},
+        )
+        token = create.json()["session_token"]
+
+        mcp_ref = _deps()._mcp_manager
+        mcp_ref.subprocesses[token] = True
+        mcp_ref.set_result(
+            "mongodb_list_collections",
+            {"collections": [{"name": "users"}]},
+        )
+        mcp_ref.set_result(
+            "mongodb_collection_schema",
+            {
+                "fields": ["_id", "user_id", "signup_date", "country"],
+                "doc_count": 100,
+            },
+        )
+
+        sample_resp = client.get(f"/api/v1/sample/{token}")
+        assert sample_resp.status_code == 200
+
+        planner_ref = _deps()._planner
+        planner_ref._plan = [
+            {"module": "anomaly", "collection": "generatedpapers", "params": {}},
+        ]
+
+        resp = client.post(
+            "/api/v1/plan",
+            json={
+                "session_token": token,
+                "collections": ["users"],
+                "modules": ["funnel"],
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["plan"]) == 1
+        assert body["plan"][0]["module"] == "funnel"
+
     def test_falls_back_to_deterministic_plan(self, client) -> None:
         create = client.post(
             "/api/v1/connect",
@@ -181,6 +249,32 @@ class TestPlan:
         assert resp.status_code == 200
         body = resp.json()
         assert len(body["plan"]) == 2
+
+    def test_skips_invalid_planner_steps(self, client) -> None:
+        create = client.post(
+            "/api/v1/connect",
+            json={"connection_string": "mongodb://u:p@host:27017/db"},
+        )
+        token = create.json()["session_token"]
+
+        planner_ref = _deps()._planner
+        planner_ref._plan = [
+            {"module": "anomaly", "collection": "generatedpapers", "params": {}},
+            {"module": "funnel", "collection": "users", "params": {}},
+        ]
+
+        resp = client.post(
+            "/api/v1/plan",
+            json={
+                "session_token": token,
+                "collections": ["generatedpapers", "users"],
+                "modules": ["anomaly", "funnel"],
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["plan"]) == 1
+        assert body["plan"][0]["module"] == "funnel"
 
     def test_rejects_token_mismatch(self, client) -> None:
         create = client.post(

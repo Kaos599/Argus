@@ -98,6 +98,23 @@ async def sample(
             # Best-effort: skip the failing collection.
             continue
 
+    collection_map: dict[str, dict[str, Any]] = {}
+    for sample in samples:
+        collection_map[sample.name] = {
+            "doc_count": sample.doc_count,
+            "sample_fields": sample.sample_fields,
+        }
+
+    sampled_schema = {"collections": [
+        {
+            "name": sample.name,
+            "doc_count": sample.doc_count,
+            "sample_fields": sample.sample_fields,
+        }
+        for sample in samples
+    ],
+    **collection_map}
+    await store.update(token, sampled_schema=sampled_schema)
     return SampleResponse(collections=samples)
 
 

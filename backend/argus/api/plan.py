@@ -62,7 +62,7 @@ async def plan(
     token = request.session_token
 
     # Resolve the sampled schema from the session.
-    sampled_schema = session.sampled_schema or {"collections": []}
+    sampled_schema = session.sampled_schema or {}
 
     # Ask the LLM to plan. We pass the schema; the LLM picks modules
     # + collection + params. If the LLM is unavailable, fall back to
@@ -82,16 +82,27 @@ async def plan(
         module_name = _coerce_module_name(step.get("module"))
         if module_name is None or module_name not in request.modules:
             continue
-        collection = step.get("collection") or (
-            request.collections[0] if request.collections else None
-        )
-        if not collection:
-            continue
         params = step.get("params") or {}
         try:
             from argus.insights.card_renderer import get_module
 
             module = get_module(module_name)
+        except Exception:
+            continue
+
+        # Only use collections that are both requested and valid for the module.
+        collection = step.get("collection") if isinstance(step.get("collection"), str) else None
+        if collection not in request.collections or collection not in module.required_collections:
+            collection = next(
+                (c for c in request.collections if c in module.required_collections),
+                None,
+            )
+        if not collection:
+            continue
+        if sampled_schema and not module.can_run(sampled_schema):
+            continue
+
+        try:
             pipeline = module.generate_pipeline(sampled_schema, params)
         except Exception:
             continue
@@ -103,6 +114,48 @@ async def plan(
                 estimated_runtime_s=None,
             )
         )
+
+    if not plan_steps:
+        # If the planner returned steps but they were filtered out
+        # because they didn't match the available schema or selected
+        # collections, fall back to a deterministic plan.
+        if steps:
+            steps = _fallback_plan(request.modules, request.collections)
+            for step in steps:
+                module_name = _coerce_module_name(step.get("module"))
+                if module_name is None or module_name not in request.modules:
+                    continue
+                params = step.get("params") or {}
+                try:
+                    from argus.insights.card_renderer import get_module
+
+                    module = get_module(module_name)
+                except Exception:
+                    continue
+
+                collection = step.get("collection") if isinstance(step.get("collection"), str) else None
+                if collection not in request.collections or collection not in module.required_collections:
+                    collection = next(
+                        (c for c in request.collections if c in module.required_collections),
+                        None,
+                    )
+                if not collection:
+                    continue
+                if sampled_schema and not module.can_run(sampled_schema):
+                    continue
+
+                try:
+                    pipeline = module.generate_pipeline(sampled_schema, params)
+                except Exception:
+                    continue
+                plan_steps.append(
+                    PlanStep(
+                        module=module_name,
+                        collection=collection,
+                        mql_pipeline=pipeline,
+                        estimated_runtime_s=None,
+                    )
+                )
 
     if not plan_steps:
         raise HTTPException(
@@ -141,8 +194,6 @@ def _fallback_plan(modules: list[ModuleName], collections: list[str]) -> list[di
         if meta is None:
             continue
         collection = next((c for c in collections if c in meta.required_collections), None)
-        if collection is None and collections:
-            collection = collections[0]
         if collection is None:
             continue
         fallback.append({"module": module_name.value, "collection": collection, "params": {}})

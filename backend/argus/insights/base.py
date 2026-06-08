@@ -64,6 +64,19 @@ class InsightModule(Protocol):
 _COOKBOOK_DIR = Path(__file__).parent / "cookbook"
 
 
+def get_collection(sampled_schema: dict[str, Any], name: str) -> dict[str, Any] | None:
+    if name in sampled_schema and isinstance(sampled_schema[name], dict):
+        return sampled_schema[name]
+    collections = sampled_schema.get("collections")
+    if isinstance(collections, dict) and isinstance(collections.get(name), dict):
+        return collections[name]
+    if isinstance(collections, list):
+        for entry in collections:
+            if isinstance(entry, dict) and entry.get("name") == name:
+                return entry
+    return None
+
+
 def load_cookbook(module_name: ModuleName) -> ModuleMetadata:
     """Load a module's metadata from its YAML file.
 

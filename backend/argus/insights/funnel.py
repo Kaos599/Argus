@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from argus.insights.base import get_collection
 from argus.models.api_types import ModuleName
 from argus.models.card import (
     BarChartBar,
@@ -66,7 +67,7 @@ class FunnelModule:
     required_collections = ["users"]
 
     def can_run(self, sampled_schema: dict[str, Any]) -> bool:
-        users = sampled_schema.get("users") or sampled_schema.get("collections", {}).get("users")
+        users = get_collection(sampled_schema, "users")
         if not isinstance(users, dict):
             return False
         fields = users.get("sample_fields") or users.get("fields") or []
