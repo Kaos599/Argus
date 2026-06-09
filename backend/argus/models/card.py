@@ -294,16 +294,19 @@ class CardDescriptor(BaseModel):
 
     component_name: CardName = Field(..., alias="componentName")
     props: dict = Field(default_factory=dict)
+    module: str | None = None
 
     @classmethod
-    def from_card(cls, card_name: CardName, props: _CardModel) -> CardDescriptor:
+    def from_card(cls, card_name: CardName, props: _CardModel, *, module: str | None = None) -> CardDescriptor:
         """Helper to build a descriptor from a typed card prop model.
 
         Serializes the props model to a dict (preserving snake_case
         → camelCase aliases) and wraps it in the descriptor.
         """
         return cls(
-            component_name=card_name, props=props.model_dump(by_alias=True, exclude_none=False)
+            component_name=card_name,
+            props=props.model_dump(by_alias=True, exclude_none=False),
+            module=module,
         )
 
     @classmethod
