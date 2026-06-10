@@ -6,7 +6,6 @@ import Link from "next/link";
 import {
   AlertTriangle,
   Check,
-  Eye,
   Loader2,
   Lock,
   ShieldCheck,
@@ -60,7 +59,6 @@ export default function ConnectPage() {
         setSessionToken(res.session_token);
         setLocalToken(res.session_token);
         setStatus("ready");
-        // Brief pause so the user sees the "ready" status pill
         setTimeout(() => router.push(`/onboarding?token=${res.session_token}`), 600);
       }
     } catch (err) {
@@ -84,11 +82,11 @@ export default function ConnectPage() {
         className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-2xl flex-col gap-8 px-4 py-12"
       >
         <header>
-          <p className="inline-flex items-center gap-2 text-xs text-argus-text-muted">
-            <ShieldCheck className="h-3.5 w-3.5 text-argus-accent" aria-hidden />
+          <p className="inline-flex items-center gap-2 text-xs font-medium text-argus-accent">
+            <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
             Read-only by design
           </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight">
+          <h1 className="mt-3 font-heading text-3xl font-bold tracking-tight">
             Connect your MongoDB Atlas cluster
           </h1>
           <p className="mt-2 text-argus-text-muted">
@@ -99,7 +97,7 @@ export default function ConnectPage() {
 
         <form
           onSubmit={handleConnect}
-          className="space-y-6 rounded-lg border border-argus-border bg-argus-bg-elevated p-6"
+          className="space-y-6 rounded-[16px] border border-argus-border bg-argus-bg-elevated/50 argus-glass p-8"
         >
           <div>
             <label
@@ -115,41 +113,41 @@ export default function ConnectPage() {
               placeholder="mongodb+srv://user:pass@cluster.mongodb.net/dbname"
               rows={3}
               spellCheck={false}
-              className="mt-2 block w-full resize-y rounded-md border border-argus-border bg-argus-bg-sunken p-3 font-mono text-xs text-argus-text placeholder:text-argus-text-subtle focus:border-argus-primary focus:outline-none"
+              className="mt-2 block w-full resize-y rounded-[10px] border border-argus-border bg-argus-bg-sunken p-3 font-mono text-xs text-argus-text placeholder:text-argus-text-subtle transition-colors focus:border-argus-accent focus:outline-none focus:ring-1 focus:ring-argus-accent/20"
             />
             {connString && !isValidFormat && (
-              <p className="mt-1 text-xs text-argus-danger">
+              <p className="mt-1.5 text-xs text-argus-danger">
                 Must start with <code>mongodb://</code> or{" "}
                 <code>mongodb+srv://</code>
               </p>
             )}
-            <p className="mt-1 text-xs text-argus-text-subtle">
+            <p className="mt-1.5 text-xs text-argus-text-subtle">
               The connection string is never sent to the browser after submit.
             </p>
           </div>
 
-          <fieldset className="space-y-3">
+          <fieldset className="space-y-4">
             <legend className="block text-sm font-medium text-argus-text">
               I understand the risks
             </legend>
-            <ul className="space-y-2 rounded-md border border-argus-border bg-argus-bg p-3 text-xs text-argus-text-muted">
+            <ul className="space-y-2 rounded-[12px] border border-argus-border bg-argus-bg p-4 text-xs text-argus-text-muted">
               {RISKS.map((r, i) => (
-                <li key={i} className="flex gap-2">
-                  <span className="mt-0.5 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-argus-bg-sunken text-[10px] font-bold text-argus-text">
+                <li key={i} className="flex gap-2.5 leading-relaxed">
+                  <span className="mt-0.5 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-[4px] bg-argus-bg-sunken text-[10px] font-bold text-argus-text">
                     {i + 1}
                   </span>
                   <span>{r}</span>
                 </li>
               ))}
             </ul>
-            <label className="flex h-11 cursor-pointer items-start gap-2 text-sm">
+            <label className="flex cursor-pointer items-start gap-2.5 text-sm">
               <input
                 type="checkbox"
                 checked={acknowledged}
                 onChange={(e) => setAcknowledged(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded-sm border-argus-border accent-argus-primary"
+                className="mt-0.5 h-4 w-4 rounded-[4px] border-argus-border text-argus-accent focus:ring-argus-accent/20"
               />
-              <span>
+              <span className="leading-relaxed text-argus-text-muted">
                 I&apos;ve read and understood the 5 risks above. I will use a
                 read-only user (or a sandbox cluster) for the demo.
               </span>
@@ -162,9 +160,9 @@ export default function ConnectPage() {
               type="submit"
               disabled={!canSubmit}
               className={cn(
-                "inline-flex h-11 items-center gap-2 rounded-md px-5 text-sm font-semibold transition-colors",
+                "inline-flex h-11 items-center gap-2 rounded-[10px] px-5 text-sm font-semibold transition-all",
                 canSubmit
-                  ? "bg-argus-primary text-argus-primary-fg hover:opacity-90"
+                  ? "bg-argus-accent text-black hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(0,212,170,0.2)]"
                   : "cursor-not-allowed bg-argus-bg-sunken text-argus-text-subtle",
               )}
             >
@@ -192,15 +190,15 @@ export default function ConnectPage() {
         </form>
 
         {/* Recommended read-only user */}
-        <section className="rounded-lg border border-argus-border bg-argus-bg-elevated p-6">
-          <h2 className="inline-flex items-center gap-2 text-base font-semibold">
+        <section className="rounded-[16px] border border-argus-border bg-argus-bg-elevated/50 argus-glass p-8">
+          <h2 className="inline-flex items-center gap-2 font-heading text-base font-semibold">
             <Lock className="h-4 w-4 text-argus-accent" aria-hidden />
             Recommended: create a read-only user
           </h2>
-          <p className="mt-1 text-sm text-argus-text-muted">
+          <p className="mt-1.5 text-sm text-argus-text-muted">
             In <code className="font-mono text-xs">mongosh</code>:
           </p>
-          <pre className="mt-3 overflow-x-auto rounded-md bg-argus-bg-sunken p-3 font-mono text-xs text-argus-text">
+          <pre className="mt-4 overflow-x-auto rounded-[10px] bg-argus-bg-sunken p-4 font-mono text-xs text-argus-text">
 {`use admin
 db.createUser({
   user: "argus_ro",
@@ -208,14 +206,14 @@ db.createUser({
   roles: [{ role: "readAnyDatabase", db: "admin" }]
 })`}
           </pre>
-          <p className="mt-2 text-xs text-argus-text-subtle">
+          <p className="mt-3 text-xs text-argus-text-subtle">
             Then use the resulting connection string in the form above.
           </p>
         </section>
 
         <p className="text-center text-xs text-argus-text-subtle">
           Want to skip the connect step?{" "}
-          <Link href="/dashboard" className="text-argus-primary hover:underline">
+          <Link href="/dashboard" className="text-argus-accent hover:underline">
             Go straight to the dashboard
           </Link>{" "}
           (mock data).
@@ -234,7 +232,7 @@ function StatusPill({
 }) {
   if (status === "idle") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-argus-border bg-argus-bg px-2 py-1 text-xs text-argus-text-muted">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-argus-border bg-argus-bg px-2.5 py-1 text-xs text-argus-text-muted">
         <span className="h-1.5 w-1.5 rounded-full bg-argus-text-subtle" aria-hidden />
         Idle
       </span>
@@ -242,7 +240,7 @@ function StatusPill({
   }
   if (status === "probing") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-argus-warning/40 bg-argus-warning-bg/40 px-2 py-1 text-xs text-argus-warning">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-argus-warning/30 bg-argus-warning-bg/30 px-2.5 py-1 text-xs text-argus-warning">
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
         Probing cluster
       </span>
@@ -250,14 +248,14 @@ function StatusPill({
   }
   if (status === "ready") {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-argus-accent/40 bg-argus-success-bg/40 px-2 py-1 text-xs text-argus-accent">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-argus-accent/30 bg-argus-accent/5 px-2.5 py-1 text-xs text-argus-accent">
         <Check className="h-3 w-3" aria-hidden />
         Ready · {sessionToken?.slice(0, 8) ?? ""}
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-argus-danger/40 bg-argus-danger-bg/40 px-2 py-1 text-xs text-argus-danger">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-argus-danger/30 bg-argus-danger-bg/30 px-2.5 py-1 text-xs text-argus-danger">
       <AlertTriangle className="h-3 w-3" aria-hidden />
       Error
     </span>

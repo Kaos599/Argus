@@ -18,7 +18,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       role="radiogroup"
       aria-label="Color theme"
       className={cn(
-        "inline-flex items-center gap-1 rounded-md border border-argus-border bg-argus-bg-elevated p-1",
+        "inline-flex items-center gap-0.5 rounded-[8px] border border-argus-border bg-argus-bg p-0.5",
         className,
       )}
     >
@@ -33,13 +33,13 @@ export function ThemeToggle({ className }: { className?: string }) {
             aria-label={label}
             onClick={() => setTheme(value)}
             className={cn(
-              "inline-flex h-8 w-8 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 items-center justify-center rounded-sm transition-colors",
+              "inline-flex h-7 w-7 items-center justify-center rounded-[6px] transition-all duration-150",
               active
-                ? "bg-argus-bg text-argus-text shadow-sm"
+                ? "bg-argus-bg-elevated text-argus-text shadow-sm"
                 : "text-argus-text-muted hover:text-argus-text",
             )}
           >
-            <Icon className="h-4 w-4" aria-hidden />
+            <Icon className="h-3.5 w-3.5" aria-hidden />
           </button>
         );
       })}

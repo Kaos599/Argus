@@ -1,45 +1,52 @@
 @import "tailwindcss";
 
-/* Dark mode is class-based. We add .dark to <html> for dark theme. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ============================================================
-   Design tokens — per research/17-theming.md
-   Inter (UI) + JetBrains Mono (numbers, code, MQL pipelines)
-   Default: light; .dark class flips to dark mode.
-   ============================================================ */
-
 :root {
-  /* Brand */
-  --argus-primary: #1e40af;
+  /* Brand palette — The Observatory */
+  --argus-primary: #2563eb;
   --argus-primary-fg: #ffffff;
-  --argus-secondary: #7c3aed;
-  --argus-accent: #059669;
-  --argus-warning: #d97706;
-  --argus-danger: #dc2626;
+  --argus-secondary: #7c5cfc;
+  --argus-accent: #00d4aa;
+  --argus-warning: #f59e0b;
+  --argus-danger: #ef4444;
 
-  /* Surfaces */
-  --argus-bg: #ffffff;
-  --argus-bg-elevated: #f9fafb;
-  --argus-bg-sunken: #f3f4f6;
-  --argus-border: #e5e7eb;
-  --argus-border-strong: #d1d5db;
+  /* Surfaces — warm light mode */
+  --argus-bg: #f6f4ef;
+  --argus-bg-elevated: #fcfaf6;
+  --argus-bg-sunken: #eeebe4;
+  --argus-border: rgba(0, 0, 0, 0.07);
+  --argus-border-strong: rgba(0, 0, 0, 0.14);
 
   /* Text */
-  --argus-text: #0a0a0a;
-  --argus-text-muted: #6b7280;
-  --argus-text-subtle: #9ca3af;
-  --argus-text-inverse: #ffffff;
+  --argus-text: #18181b;
+  --argus-text-muted: #6b6b78;
+  --argus-text-subtle: #9c9caa;
+  --argus-text-inverse: #fcfaf6;
 
   /* Semantic backgrounds */
   --argus-success-bg: #d1fae5;
-  --argus-warning-bg: #fef3c7;
-  --argus-danger-bg: #fee2e2;
+  --argus-warning-bg: #fff3e0;
+  --argus-danger-bg: #ffe4e6;
   --argus-info-bg: #dbeafe;
 
   /* Typography */
-  --argus-font-sans: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
-  --argus-font-mono: var(--font-jetbrains-mono), "JetBrains Mono", Menlo, monospace;
+  --argus-font-heading: var(--font-syne), "Syne", sans-serif;
+  --argus-font-body: var(--font-dm-sans), "DM Sans", sans-serif;
+  --argus-font-mono: var(--font-jetbrains-mono), "JetBrains Mono", monospace;
+  --argus-font-sans: var(--argus-font-body);
+
+  /* Shadows */
+  --argus-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --argus-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --argus-shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.08);
+  --argus-shadow-glow: 0 0 24px rgba(0, 212, 170, 0.1);
+
+  /* Radii */
+  --argus-radius-sm: 6px;
+  --argus-radius-md: 10px;
+  --argus-radius-lg: 16px;
+  --argus-radius-full: 9999px;
 
   /* Spacing (4px scale) */
   --argus-space-1: 4px;
@@ -51,62 +58,51 @@
   --argus-space-12: 48px;
   --argus-space-16: 64px;
 
-  /* Radii */
-  --argus-radius-sm: 4px;
-  --argus-radius-md: 8px;
-  --argus-radius-lg: 12px;
-  --argus-radius-full: 9999px;
-
-  /* Shadows */
-  --argus-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --argus-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --argus-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-
-  /* Chart colors (also used as `argus-color-*` utilities) */
-  --argus-chart-1: #1e40af;
-  --argus-chart-2: #7c3aed;
-  --argus-chart-3: #059669;
-  --argus-chart-4: #d97706;
-  --argus-chart-5: #dc2626;
+  /* Chart colors */
+  --argus-chart-1: #2563eb;
+  --argus-chart-2: #7c5cfc;
+  --argus-chart-3: #00d4aa;
+  --argus-chart-4: #f59e0b;
+  --argus-chart-5: #ef4444;
 }
 
 .dark {
-  --argus-primary: #60a5fa;
-  --argus-primary-fg: #0a0a0a;
+  --argus-primary: #38bdf8;
+  --argus-primary-fg: #050508;
   --argus-secondary: #a78bfa;
-  --argus-accent: #34d399;
-  --argus-warning: #fbbf24;
-  --argus-danger: #f87171;
+  --argus-accent: #00f0a0;
+  --argus-warning: #ff6b35;
+  --argus-danger: #ff4060;
 
-  --argus-bg: #0a0a0a;
-  --argus-bg-elevated: #171717;
-  --argus-bg-sunken: #0f0f0f;
-  --argus-border: #262626;
-  --argus-border-strong: #404040;
+  --argus-bg: #050508;
+  --argus-bg-elevated: #0b0b12;
+  --argus-bg-sunken: #030306;
+  --argus-border: rgba(255, 255, 255, 0.06);
+  --argus-border-strong: rgba(255, 255, 255, 0.12);
 
-  --argus-text: #fafafa;
-  --argus-text-muted: #a3a3a3;
-  --argus-text-subtle: #737373;
-  --argus-text-inverse: #0a0a0a;
+  --argus-text: #ededef;
+  --argus-text-muted: #8a8a93;
+  --argus-text-subtle: #5c5c66;
+  --argus-text-inverse: #050508;
 
   --argus-success-bg: #064e3b;
-  --argus-warning-bg: #78350f;
-  --argus-danger-bg: #7f1d1d;
-  --argus-info-bg: #1e3a8a;
+  --argus-warning-bg: #451a03;
+  --argus-danger-bg: #450a0a;
+  --argus-info-bg: #0c1f3e;
 
-  --argus-chart-1: #60a5fa;
+  --argus-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --argus-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --argus-shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --argus-shadow-glow: 0 0 24px rgba(0, 240, 160, 0.07);
+
+  --argus-chart-1: #38bdf8;
   --argus-chart-2: #a78bfa;
-  --argus-chart-3: #34d399;
-  --argus-chart-4: #fbbf24;
-  --argus-chart-5: #f87171;
+  --argus-chart-3: #00f0a0;
+  --argus-chart-4: #ff6b35;
+  --argus-chart-5: #ff4060;
 }
 
-/* ============================================================
-   Tailwind v4 theme — exposes the design tokens as utilities
-   ============================================================ */
-
 @theme inline {
-  /* Colors. `bg-argus-bg`, `text-argus-text`, `border-argus-border`, etc. */
   --color-argus-primary: var(--argus-primary);
   --color-argus-primary-fg: var(--argus-primary-fg);
   --color-argus-secondary: var(--argus-secondary);
@@ -126,27 +122,26 @@
   --color-argus-warning-bg: var(--argus-warning-bg);
   --color-argus-danger-bg: var(--argus-danger-bg);
   --color-argus-info-bg: var(--argus-info-bg);
-
   --color-argus-chart-1: var(--argus-chart-1);
   --color-argus-chart-2: var(--argus-chart-2);
   --color-argus-chart-3: var(--argus-chart-3);
   --color-argus-chart-4: var(--argus-chart-4);
   --color-argus-chart-5: var(--argus-chart-5);
 
-  /* Fonts */
+  --font-heading: var(--argus-font-heading);
+  --font-body: var(--argus-font-body);
   --font-sans: var(--argus-font-sans);
   --font-mono: var(--argus-font-mono);
 
-  /* Radii */
   --radius-sm: var(--argus-radius-sm);
   --radius-md: var(--argus-radius-md);
   --radius-lg: var(--argus-radius-lg);
   --radius-full: var(--argus-radius-full);
+
+  --shadow-glow: var(--argus-shadow-glow);
 }
 
-/* ============================================================
-   Base styles
-   ============================================================ */
+/* ===== Base Styles ===== */
 
 * {
   border-color: var(--argus-border);
@@ -156,28 +151,45 @@ html,
 body {
   background-color: var(--argus-bg);
   color: var(--argus-text);
-  font-family: var(--argus-font-sans);
+  font-family: var(--argus-font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Numbers align cleanly in cards (per research/17-theming.md § Special typography) */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--argus-font-heading);
+}
+
 .tabular-nums,
 .font-mono {
   font-variant-numeric: tabular-nums;
 }
 
-/* Recharts text inherits our font + color */
+::selection {
+  background: rgba(0, 212, 170, 0.2);
+  color: var(--argus-text);
+}
+
+.dark ::selection {
+  background: rgba(0, 240, 160, 0.2);
+  color: var(--argus-text);
+}
+
+/* Recharts */
 .recharts-cartesian-axis-tick-value,
 .recharts-legend-item-text,
 .recharts-text {
-  font-family: var(--argus-font-sans) !important;
+  font-family: var(--argus-font-body) !important;
   fill: var(--argus-text-muted) !important;
 }
 
-/* react-grid-layout visual tweaks */
+.recharts-default-tooltip {
+  border-radius: var(--argus-radius-md) !important;
+}
+
+/* react-grid-layout */
 .react-grid-item.react-grid-placeholder {
-  background: var(--argus-primary) !important;
+  background: var(--argus-accent) !important;
   opacity: 0.15 !important;
   border-radius: var(--argus-radius-md);
 }
@@ -186,7 +198,11 @@ body {
   border-color: var(--argus-text-subtle);
 }
 
-/* Skip-to-content (per research/20-responsive.md accessibility) */
+.react-grid-item {
+  transition: opacity 0.2s ease;
+}
+
+/* Skip link */
 .skip-link {
   position: absolute;
   left: -9999px;
@@ -199,19 +215,20 @@ body {
   text-decoration: none;
   font-weight: 600;
 }
+
 .skip-link:focus {
   left: var(--argus-space-3);
   top: var(--argus-space-3);
 }
 
-/* Focus ring (WCAG 2.1 AA) */
+/* Focus */
 *:focus-visible {
   outline: 2px solid var(--argus-primary);
   outline-offset: 2px;
   border-radius: var(--argus-radius-sm);
 }
 
-/* Respect prefers-reduced-motion (per research/17-theming.md animation) */
+/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -223,18 +240,133 @@ body {
   }
 }
 
-/* scrollbar polish */
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: var(--argus-bg-sunken);
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--argus-border-strong);
   border-radius: var(--argus-radius-full);
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: var(--argus-text-subtle);
 }
+
+/* ===== Animations ===== */
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 240, 160, 0.05); }
+  50% { box-shadow: 0 0 24px rgba(0, 240, 160, 0.15); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes border-flow {
+  0%, 100% { border-color: var(--argus-border); }
+  50% { border-color: var(--argus-accent); }
+}
+
+@keyframes iris-reveal {
+  from { clip-path: circle(0% at var(--x, 50%) var(--y, 50%)); }
+  to { clip-path: circle(150% at var(--x, 50%) var(--y, 50%)); }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.4s ease forwards;
+}
+
+/* ===== Utility classes ===== */
+
+.argus-glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.dark .argus-glass {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.argus-glow-accent {
+  box-shadow: var(--argus-shadow-glow);
+}
+
+.argus-gradient-mesh {
+  background:
+    radial-gradient(ellipse 80% 50% at 0% 25%, rgba(0, 212, 170, 0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 100% 75%, rgba(37, 99, 235, 0.04) 0%, transparent 60%),
+    var(--argus-bg);
+}
+
+.dark .argus-gradient-mesh {
+  background:
+    radial-gradient(ellipse 80% 50% at 0% 25%, rgba(0, 240, 160, 0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 100% 75%, rgba(56, 189, 248, 0.06) 0%, transparent 60%),
+    var(--argus-bg);
+}
+
+.argus-gradient-hero {
+  background:
+    radial-gradient(ellipse 100% 60% at 50% 0%, rgba(0, 240, 160, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 50% at 80% 100%, rgba(56, 189, 248, 0.05) 0%, transparent 50%),
+    var(--argus-bg);
+}
+
+.dark .argus-gradient-hero {
+  background:
+    radial-gradient(ellipse 100% 60% at 50% 0%, rgba(0, 240, 160, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 50% at 80% 100%, rgba(56, 189, 248, 0.07) 0%, transparent 50%),
+    var(--argus-bg);
+}
+
+.argus-stagger-1 { animation-delay: 0.1s; }
+.argus-stagger-2 { animation-delay: 0.2s; }
+.argus-stagger-3 { animation-delay: 0.3s; }
+.argus-stagger-4 { animation-delay: 0.4s; }
+.argus-stagger-5 { animation-delay: 0.5s; }
