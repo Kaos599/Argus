@@ -66,6 +66,23 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
+  // Auto-refresh every 30s — re-runs MQL pipelines against live MongoDB,
+  // then fetches the updated dashboard. Keeps polling even when cards
+  // are empty so the dashboard auto-recovers after a failed refresh.
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(async () => {
+      try {
+        await refresh({ session_token: token });
+        const fresh = await getDashboard(token);
+        setDashboard(fresh);
+      } catch {
+        // swallow errors; next interval will retry
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [token]);
+
   async function handleLayoutChange(_currentLayout: unknown, allLayouts: unknown) {
     if (!token || !dashboard) return;
     const layouts = allLayouts as DashboardResponseType["layout"];
@@ -87,6 +104,9 @@ export default function DashboardPage() {
       await refresh({ session_token: token });
       const fresh = await getDashboard(token);
       setDashboard(fresh);
+    } catch {
+      // If refresh or re-fetch fails, the existing dashboard stays intact.
+      // The auto-refresh interval will retry on the next cycle.
     } finally {
       setRefreshing(false);
     }
@@ -104,7 +124,7 @@ export default function DashboardPage() {
           ? {
               ...d,
               cards: [...d.cards, res.card],
-              layout: appendLayoutItem(d.layout, `card-${Date.now()}`),
+              layout: appendLayoutItem(d.layout, res.card_id),
             }
           : d,
       );
@@ -239,15 +259,6 @@ export default function DashboardPage() {
               <div
                 key={`card-${i}`}
                 className="group"
-                data-grid={{
-                  i: `card-${i}`,
-                  x: 0,
-                  y: 0,
-                  w: 4,
-                  h: 4,
-                  minW: 2,
-                  minH: 3,
-                }}
               >
                 <DraggableCardWrapper descriptor={descriptor} />
               </div>

@@ -197,8 +197,8 @@ async def _event_stream(
 
         # Render the card.
         try:
-            module = get_module(module_name)
-            descriptor = module.render_card(docs, params)
+            insight = get_module(module_name)
+            descriptor = insight.render_card(docs, params)
         except Exception as exc:
             logger.exception("render_card failed for module=%s", module_name.value)
             descriptor = CardDescriptor.error(
@@ -206,6 +206,7 @@ async def _event_stream(
                 title=f"{module_name.value.title()} render error",
                 is_retryable=True,
             )
+        descriptor.module = module_name.value
 
         card_dict = descriptor.model_dump(by_alias=True)
         generated_cards.append(card_dict)

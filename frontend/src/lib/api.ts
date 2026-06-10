@@ -21,6 +21,8 @@ import {
   type PlanRequestType,
   type PlanResponseType,
   type ProbeResponseType,
+  type QueryRequestType,
+  type QueryResponseType,
   type RefreshRequestType,
   type RefreshResponseType,
   type RenderEventType,
@@ -36,6 +38,7 @@ import {
   mockLayout,
   mockPlan,
   mockProbe,
+  mockQuery,
   mockRefresh,
   mockRenderEvents,
   mockSample,
@@ -263,6 +266,14 @@ export async function refresh(
 ): Promise<RefreshResponseType> {
   if (USE_MOCK) return mockRefresh(body);
   return request<RefreshResponseType>("POST", "/api/v1/refresh", body, opts);
+}
+
+export async function query(
+  body: QueryRequestType,
+  opts: RequestOptions = {},
+): Promise<QueryResponseType> {
+  if (USE_MOCK) return mockQuery(body);
+  return request<QueryResponseType>("POST", "/api/v1/query", body, opts);
 }
 
 export async function health(opts: RequestOptions = {}): Promise<HealthResponseType> {

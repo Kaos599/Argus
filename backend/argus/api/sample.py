@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from argus.api.dependencies import get_mcp_manager, get_session_store, resolve_session
@@ -13,6 +16,8 @@ from argus.models.api_types import (
     SampleResponse,
 )
 from argus.state.session_store import SessionStore
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["sample"])
 
@@ -98,12 +103,18 @@ async def sample(
             # Best-effort: skip the failing collection.
             continue
 
-    # Save the sampled schema to the session so the planner can use it.
-    await store.update(
-        token,
-        sampled_schema={"collections": [s.model_dump(by_alias=True) for s in samples]}
-    )
-
+    # Persist the sampled schema on the session so refresh and the planner
+    # can use it later without re-sampling.
+    sampled_schema: dict[str, Any] = {}
+    for s in samples:
+        sampled_schema[s.name] = {
+            "sample_fields": s.sample_fields,
+            "doc_count": s.doc_count,
+        }
+    try:
+        await store.update(token, sampled_schema=sampled_schema)
+    except Exception:
+        logger.exception("Failed to persist sampled schema")
     return SampleResponse(collections=samples)
 
 
