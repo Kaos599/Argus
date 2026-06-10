@@ -72,6 +72,7 @@ function OnboardingFlow() {
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<ModuleKey[]>(["funnel", "anomaly"]);
   const [planId, setPlanId] = useState<string | null>(null);
+  const [planSteps, setPlanSteps] = useState<PlanResponseType["plan"]>([]);
   const [cards, setCards] = useState<CardDescriptorType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +102,7 @@ function OnboardingFlow() {
           modules: selectedModules,
         } as PlanRequestType);
         setPlanId(res.plan_id);
+        setPlanSteps(res.plan);
         setStep(3);
         setLoading(false);
       } else if (step === 3) {
@@ -188,7 +190,7 @@ function OnboardingFlow() {
               onChange={setSelectedModules}
             />
           )}
-          {step === 3 && <StepPlanPreview />}
+          {step === 3 && <StepPlanPreview planSteps={planSteps} />}
           {step === 4 && (
             <StepRender cards={cards} loading={loading} />
           )}
@@ -385,20 +387,30 @@ function StepInsightSelection({
 
 /* ============== Step 3: Plan preview ============== */
 
-function StepPlanPreview() {
+function StepPlanPreview({ planSteps }: { planSteps: PlanResponseType["plan"] }) {
   return (
     <section>
       <h2 className="text-2xl font-bold">Plan preview</h2>
       <p className="mt-1 text-argus-text-muted">
-        The planner will run a MongoDB aggregation per module. Press Continue to
+        The planner generated the following pipelines for your insight modules. Press Continue to
         render the cards.
       </p>
-      <div className="mt-6 rounded-md border border-argus-border bg-argus-bg-sunken p-4 font-mono text-xs text-argus-text">
-{`[
-  { $match: { type: { $in: ["signup", "activate", "purchase"] } } },
-  { $group: { _id: "$type", count: { $sum: 1 } } },
-  { $sort: { count: -1 } }
-]`}
+      <div className="mt-6 flex flex-col gap-4">
+        {planSteps.length === 0 && (
+          <div className="rounded-md border border-argus-border bg-argus-bg-sunken p-4 text-sm text-argus-text-muted">
+            No plan generated.
+          </div>
+        )}
+        {planSteps.map((step, i) => (
+          <div key={i} className="rounded-md border border-argus-border bg-argus-bg-sunken p-4">
+            <h3 className="font-semibold text-argus-text">
+              {step.module} <span className="text-argus-text-muted font-normal">({step.collection})</span>
+            </h3>
+            <pre className="mt-2 overflow-x-auto font-mono text-xs text-argus-text">
+              {JSON.stringify(step.mql_pipeline, null, 2)}
+            </pre>
+          </div>
+        ))}
       </div>
     </section>
   );

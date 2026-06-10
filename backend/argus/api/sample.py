@@ -98,6 +98,12 @@ async def sample(
             # Best-effort: skip the failing collection.
             continue
 
+    # Save the sampled schema to the session so the planner can use it.
+    await store.update(
+        token,
+        sampled_schema={"collections": [s.model_dump(by_alias=True) for s in samples]}
+    )
+
     return SampleResponse(collections=samples)
 
 
