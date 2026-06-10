@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Check, ChevronLeft, ChevronRight, Database, Eye, Loader2, Sparkles } from "lucide-react";
-import { CardRenderer } from "@/cards";
+import { CardRenderer, ErrorCard } from "@/cards";
 import { Card } from "@/components/ui/Card";
 import { TopBar } from "@/components/TopBar";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ import {
 import type {
   CardDescriptorType,
   PlanRequestType,
+  PlanResponseType,
   RenderEventType,
   SampleResponseType,
 } from "@/types/api";
@@ -72,6 +73,7 @@ function OnboardingFlow() {
   const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<ModuleKey[]>(["funnel", "anomaly"]);
   const [planId, setPlanId] = useState<string | null>(null);
+  const [planData, setPlanData] = useState<PlanResponseType["plan"]>([]);
   const [cards, setCards] = useState<CardDescriptorType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +103,7 @@ function OnboardingFlow() {
           modules: selectedModules,
         } as PlanRequestType);
         setPlanId(res.plan_id);
+        setPlanData(res.plan);
         setStep(3);
         setLoading(false);
       } else if (step === 3) {
@@ -188,7 +191,7 @@ function OnboardingFlow() {
               onChange={setSelectedModules}
             />
           )}
-          {step === 3 && <StepPlanPreview />}
+          {step === 3 && <StepPlanPreview plan={planData} />}
           {step === 4 && (
             <StepRender cards={cards} loading={loading} />
           )}
@@ -197,9 +200,14 @@ function OnboardingFlow() {
           )}
 
           {error && (
-            <div className="mt-4 rounded-md border border-argus-danger bg-argus-danger-bg/30 p-3 text-sm text-argus-danger">
-              {error}
-            </div>
+            <ErrorCard
+              title="Something went wrong"
+              message={error}
+              isRetryable
+              isFullPage={false}
+              isReadOnlyViolation={false}
+              guidance="Try going back a step and adjusting your selections."
+            />
           )}
 
           <div className="mt-8 flex items-center justify-between">
@@ -385,7 +393,7 @@ function StepInsightSelection({
 
 /* ============== Step 3: Plan preview ============== */
 
-function StepPlanPreview() {
+function StepPlanPreview({ plan }: { plan: PlanResponseType["plan"] }) {
   return (
     <section>
       <h2 className="text-2xl font-bold">Plan preview</h2>
@@ -393,12 +401,32 @@ function StepPlanPreview() {
         The planner will run a MongoDB aggregation per module. Press Continue to
         render the cards.
       </p>
-      <div className="mt-6 rounded-md border border-argus-border bg-argus-bg-sunken p-4 font-mono text-xs text-argus-text">
-{`[
-  { $match: { type: { $in: ["signup", "activate", "purchase"] } } },
-  { $group: { _id: "$type", count: { $sum: 1 } } },
-  { $sort: { count: -1 } }
-]`}
+      <div className="mt-6 space-y-3">
+        {plan.map((item, i) => (
+          <details
+            key={i}
+            open={i === 0}
+            className="rounded-md border border-argus-border bg-argus-bg-elevated"
+          >
+            <summary className="flex cursor-pointer items-center gap-2 px-4 py-3 text-sm font-medium">
+              <span className="text-argus-text-muted">#{i + 1}</span>
+              <span className="capitalize">{item.module}</span>
+              <span className="font-mono text-xs text-argus-text-subtle">
+                {item.collection}
+              </span>
+              {item.estimated_runtime_s != null && (
+                <span className="ml-auto text-xs text-argus-text-muted">
+                  ~{item.estimated_runtime_s}s
+                </span>
+              )}
+            </summary>
+            <div className="border-t border-argus-border px-4 py-3">
+              <pre className="overflow-x-auto rounded bg-argus-bg-sunken p-3 font-mono text-xs text-argus-text">
+                {JSON.stringify(item.mql_pipeline, null, 2)}
+              </pre>
+            </div>
+          </details>
+        ))}
       </div>
     </section>
   );

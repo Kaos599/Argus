@@ -58,7 +58,13 @@ export default function ChatPage() {
               <button
                 key={s}
                 type="button"
-                onClick={() => setValue(s)}
+                onClick={() => {
+                  setValue(s);
+                  requestAnimationFrame(() => {
+                    const form = document.getElementById("chat-form") as HTMLFormElement | null;
+                    if (form) form.requestSubmit();
+                  });
+                }}
                 className="inline-flex h-8 flex-shrink-0 items-center rounded-full border border-argus-border bg-argus-bg-elevated px-3 text-xs text-argus-text-muted hover:border-argus-primary hover:text-argus-primary"
               >
                 {s}
@@ -66,6 +72,7 @@ export default function ChatPage() {
             ))}
           </div>
           <form
+            id="chat-form"
             onSubmit={(e) => {
               e.preventDefault();
               void submit();

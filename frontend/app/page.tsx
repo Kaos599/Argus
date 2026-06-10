@@ -143,15 +143,16 @@ export default function Landing() {
       {/* Video */}
       <section className="mx-auto max-w-screen-xl px-4 pb-16">
         <div className="aspect-video w-full overflow-hidden rounded-lg border border-argus-border bg-argus-bg-sunken">
-          <div className="flex h-full w-full items-center justify-center text-argus-text-muted">
-            <div className="text-center">
-              <Eye className="mx-auto h-10 w-10 text-argus-primary" aria-hidden />
-              <p className="mt-2 text-sm">3-minute demo video</p>
-              <p className="text-xs text-argus-text-subtle">
-                (embed here — 0:45 is the &ldquo;drop the users collection&rdquo; moment)
-              </p>
-            </div>
-          </div>
+          <iframe
+            width="100%"
+            height="100%"
+            src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+            title="Argus demo video"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            className="h-full w-full"
+            loading="lazy"
+          />
         </div>
       </section>
 
