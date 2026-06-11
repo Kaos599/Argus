@@ -42,11 +42,7 @@ export function useChat(): {
   isStreaming: boolean;
   suggestions: string[];
 } {
-  // USE_MOCK is a module-level build-time constant, so the branch taken is
-  // identical on every render and the hook order never changes.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   if (USE_MOCK) return useMockChat();
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   return useBackendChat();
 }
 

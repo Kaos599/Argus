@@ -122,7 +122,6 @@ export const CardName = z.enum([
 export const CardDescriptor = z.object({
   componentName: CardName,
   props: z.record(z.unknown()),
-  module: z.string().optional(),
 });
 
 export type StatCardPropsType = z.infer<typeof StatCardProps>;
@@ -250,18 +249,6 @@ export const RefreshResponse = z.object({
 });
 export type RefreshRequestType = z.infer<typeof RefreshRequest>;
 export type RefreshResponseType = z.infer<typeof RefreshResponse>;
-
-// POST /api/v1/query
-export const QueryRequest = z.object({
-  session_token: z.string().min(1),
-  message: z.string().min(1),
-});
-export const QueryResponse = z.object({
-  content: z.string(),
-  card: CardDescriptor.optional(),
-});
-export type QueryRequestType = z.infer<typeof QueryRequest>;
-export type QueryResponseType = z.infer<typeof QueryResponse>;
 
 // GET /api/v1/health
 export const HealthResponse = z.object({
