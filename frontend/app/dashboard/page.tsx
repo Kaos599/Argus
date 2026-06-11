@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Plus, RefreshCw } from "lucide-react";
+import { GripVertical } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
-import { Card } from "@/components/ui/Card";
 import { CardRenderer } from "@/cards";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { DashboardEmpty } from "@/components/dashboard/DashboardEmpty";
+import { DashboardSkeletons } from "@/components/dashboard/DashboardSkeletons";
+import { AddCardPanel } from "@/components/dashboard/AddCardPanel";
 import {
   addCard,
   getDashboard,
@@ -46,6 +49,7 @@ const ResponsiveGridLayout = dynamic(
   compactType?: "vertical" | "horizontal" | null;
 }>;
 
+// Grid constants — identical to original (data logic untouched)
 const BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480 };
 const COLS = { lg: 12, md: 12, sm: 6, xs: 4 };
 const ROW_HEIGHT = 80;
@@ -56,7 +60,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddCard, setShowAddCard] = useState(false);
+  // Track whether this is the first render so stagger only fires once
+  const hasAnimated = useRef(false);
 
+  // ── Initial load ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (!token) return;
     setLoading(true);
@@ -66,6 +73,7 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
+  // ── 30-second auto-refresh (PRESERVED) ────────────────────────────────────
   useEffect(() => {
     if (!token) return;
     const interval = setInterval(async () => {
@@ -80,6 +88,7 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [token]);
 
+  // ── Layout persistence (PRESERVED) ────────────────────────────────────────
   async function handleLayoutChange(_currentLayout: unknown, allLayouts: unknown) {
     if (!token || !dashboard) return;
     const layouts = allLayouts as DashboardResponseType["layout"];
@@ -94,6 +103,7 @@ export default function DashboardPage() {
     }
   }
 
+  // ── Manual refresh ─────────────────────────────────────────────────────────
   async function handleRefresh() {
     if (!token) return;
     setRefreshing(true);
@@ -108,13 +118,11 @@ export default function DashboardPage() {
     }
   }
 
+  // ── Add card ───────────────────────────────────────────────────────────────
   async function handleAddCard(module: AddCardRequestType["module"]) {
     if (!token) return;
     try {
-      const res = await addCard({
-        session_token: token,
-        module,
-      });
+      const res = await addCard({ session_token: token, module });
       setDashboard((d) =>
         d
           ? {
@@ -129,114 +137,80 @@ export default function DashboardPage() {
     }
   }
 
+  // ── No session ─────────────────────────────────────────────────────────────
   if (!token) {
     return (
       <>
         <TopBar />
-        <main className="mx-auto max-w-md px-4 py-16 text-center">
-          <h1 className="font-heading text-2xl font-bold">No session</h1>
-          <p className="mt-2 text-argus-text-muted">
-            Start at the <Link href="/connect" className="text-argus-accent hover:underline">connect page</Link>.
+        <main
+          id="main-content"
+          className="mx-auto max-w-md px-4 py-20 text-center"
+        >
+          <h1
+            className="font-heading text-2xl font-semibold text-argus-text"
+            style={{ fontFamily: "var(--argus-font-heading)" }}
+          >
+            No session active
+          </h1>
+          <p className="mt-2 text-sm text-argus-text-muted">
+            Start by connecting a MongoDB database.
           </p>
+          <Link
+            href="/connect"
+            className="mt-6 inline-flex h-10 items-center rounded-[var(--argus-radius-md)] bg-argus-accent px-5 text-sm font-semibold text-argus-bg transition-opacity duration-150 hover:opacity-90 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-argus-accent focus-visible:ring-offset-2"
+          >
+            Connect a database
+          </Link>
         </main>
       </>
     );
   }
 
+  // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <>
         <TopBar />
-        <main className="mx-auto max-w-screen-2xl px-4 py-8">
-          <p className="text-argus-text-muted">Loading dashboard…</p>
+        <main id="main-content" className="mx-auto max-w-screen-2xl px-4 py-6">
+          <DashboardSkeletons />
         </main>
       </>
     );
   }
 
+  // ── No dashboard data ──────────────────────────────────────────────────────
   if (!dashboard) {
     return (
       <>
         <TopBar />
-        <main className="mx-auto max-w-screen-2xl px-4 py-8">
-          <p className="text-argus-text-muted">No dashboard yet.</p>
+        <main id="main-content" className="mx-auto max-w-screen-2xl px-4 py-6">
+          <DashboardEmpty />
         </main>
       </>
     );
   }
 
+  // Set animation flag after first load
+  const shouldStagger = !hasAnimated.current;
+  hasAnimated.current = true;
+
+  // ── Main dashboard ─────────────────────────────────────────────────────────
   return (
     <>
       <TopBar />
       <main id="main-content" className="mx-auto max-w-screen-2xl px-4 py-6">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="font-heading text-2xl font-bold">Dashboard</h1>
-            <p className="mt-0.5 text-sm text-argus-text-muted">
-              {dashboard.cards.length} cards
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-argus-border bg-argus-bg-elevated px-4 text-sm text-argus-text transition-all hover:border-argus-text-muted disabled:opacity-50"
-            >
-              <RefreshCw
-                className={cn("h-4 w-4", refreshing && "animate-spin")}
-                aria-hidden
-              />
-              {refreshing ? "Refreshing…" : "Refresh"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowAddCard((v) => !v)}
-              className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-argus-accent px-4 text-sm font-semibold text-black transition-all hover:scale-[1.02]"
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-              Add card
-            </button>
-          </div>
-        </div>
+        <DashboardHeader
+          cardCount={dashboard.cards.length}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          onToggleAddCard={() => setShowAddCard((v) => !v)}
+          showAddCard={showAddCard}
+        />
 
-        {showAddCard && (
-          <Card className="mb-6" surface="elevated">
-            <p className="text-sm font-medium">Add a card</p>
-            <p className="text-xs text-argus-text-muted">
-              Pick an insight module. The planner will generate a card.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(["funnel", "cohort", "rfm", "attribution", "anomaly"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => handleAddCard(m)}
-                  className="rounded-[8px] border border-argus-border bg-argus-bg px-3 py-1.5 text-xs capitalize text-argus-text transition-colors hover:border-argus-accent hover:text-argus-accent"
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-          </Card>
-        )}
+        {showAddCard && <AddCardPanel onAdd={handleAddCard} />}
 
         {dashboard.cards.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-[16px] border border-dashed border-argus-border bg-argus-bg-elevated/50 p-16 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-[12px] bg-argus-accent/10">
-              <Plus className="h-5 w-5 text-argus-accent" aria-hidden />
-            </div>
-            <h2 className="mt-4 font-heading text-lg font-semibold">No cards yet</h2>
-            <p className="mt-1 text-sm text-argus-text-muted">
-              Add a card above, or go through onboarding to generate a starter set.
-            </p>
-            <Link
-              href="/onboarding"
-              className="mt-6 inline-flex h-10 items-center rounded-[10px] bg-argus-accent px-5 text-sm font-semibold text-black transition-all hover:scale-[1.02]"
-            >
-              Start onboarding
-            </Link>
-          </div>
+          <DashboardEmpty />
         ) : (
           <ResponsiveGridLayout
             className="layout"
@@ -253,7 +227,18 @@ export default function DashboardPage() {
             compactType="vertical"
           >
             {dashboard.cards.map((descriptor, i) => (
-              <div key={`card-${i}`} className="group">
+              <div
+                key={`card-${i}`}
+                className="group/grid-item"
+                style={
+                  shouldStagger
+                    ? {
+                        opacity: 0,
+                        animation: `fade-in-up 0.4s cubic-bezier(0.16,1,0.3,1) ${i * 50}ms forwards`,
+                      }
+                    : undefined
+                }
+              >
                 <DraggableCardWrapper descriptor={descriptor} />
               </div>
             ))}
@@ -264,28 +249,39 @@ export default function DashboardPage() {
   );
 }
 
+// ── Draggable wrapper ────────────────────────────────────────────────────────
 function DraggableCardWrapper({ descriptor }: { descriptor: CardDescriptorType }) {
   return (
     <div className="relative h-full w-full">
+      {/* Drag handle — thin strip at top, visible on group-hover */}
       <div
-        className="card-drag-handle absolute inset-x-0 top-0 z-10 h-4 cursor-move rounded-t-[10px] opacity-0 transition-opacity group-hover:opacity-100"
-        style={{
-          background: "linear-gradient(180deg, var(--argus-accent) 0%, transparent 100%)",
-          opacity: 0,
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.15"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.opacity = "0"; }}
-        aria-label="Drag to reorder"
+        className={cn(
+          "card-drag-handle",
+          "absolute inset-x-0 top-0 z-10 flex h-5 cursor-move items-center justify-center",
+          "rounded-t-[var(--argus-radius-lg)]",
+          "opacity-0 transition-opacity duration-150",
+          "group-hover/grid-item:opacity-100",
+        )}
+        aria-label="Drag to reorder card"
         role="button"
         tabIndex={0}
-      />
-      <div className="h-full w-full">
+        title="Drag to reorder"
+      >
+        <GripVertical
+          className="h-3.5 w-3.5 text-argus-text-subtle"
+          aria-hidden
+        />
+      </div>
+
+      {/* Card content — full height */}
+      <div className="h-full w-full pt-5">
         <CardRenderer descriptor={descriptor} />
       </div>
     </div>
   );
 }
 
+// ── Layout helpers (PRESERVED, unchanged logic) ────────────────────────────
 function appendLayoutItem(
   layout: DashboardResponseType["layout"],
   id: string,

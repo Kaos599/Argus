@@ -158,6 +158,11 @@ body {
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--argus-font-heading);
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
 }
 
 .tabular-nums,
@@ -271,11 +276,6 @@ h1, h2, h3, h4, h5, h6 {
   to { opacity: 1; }
 }
 
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 8px rgba(0, 240, 160, 0.05); }
-  50% { box-shadow: 0 0 24px rgba(0, 240, 160, 0.15); }
-}
-
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -291,26 +291,12 @@ h1, h2, h3, h4, h5, h6 {
   to { opacity: 1; transform: translateX(0); }
 }
 
-@keyframes border-flow {
-  0%, 100% { border-color: var(--argus-border); }
-  50% { border-color: var(--argus-accent); }
-}
-
-@keyframes iris-reveal {
-  from { clip-path: circle(0% at var(--x, 50%) var(--y, 50%)); }
-  to { clip-path: circle(150% at var(--x, 50%) var(--y, 50%)); }
-}
-
 .animate-fade-in-up {
   animation: fade-in-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-fade-in {
   animation: fade-in 0.5s ease forwards;
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 3s ease-in-out infinite;
 }
 
 .animate-scale-in {
