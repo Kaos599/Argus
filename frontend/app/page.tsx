@@ -1,284 +1,221 @@
 "use client";
 
 import Link from "next/link";
+import { motion } from "framer-motion";
 import {
   ArrowRight,
-  Database,
   Eye,
   Lock,
   ShieldCheck,
   Sparkles,
   TrendingUp,
-  Users,
-  Workflow,
+  Code2,
+  Cpu,
+  LayoutDashboard,
+  Bot
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-const MODULES = [
-  {
-    Icon: TrendingUp,
-    title: "Funnel",
-    blurb: "Conversion rates between top events, computed in a single $facet round-trip.",
-  },
-  {
-    Icon: Users,
-    title: "Cohort",
-    blurb: "Weekly retention by acquisition week. No SQL, no Tableau, no warehouse.",
-  },
-  {
-    Icon: Database,
-    title: "RFM",
-    blurb: "Recency-Frequency-Monetary segmentation on a 5×5 grid.",
-  },
-  {
-    Icon: Workflow,
-    title: "Attribution",
-    blurb: "First-touch attribution. Markov and Shapley are on the roadmap.",
-  },
-  {
-    Icon: Sparkles,
-    title: "Anomaly",
-    blurb: "Z-score on daily metrics vs the trailing 28-day mean.",
-  },
-];
+import { BentoGrid, BentoGridItem } from "@/components/BentoGrid";
+import { GenerativeUIMockup } from "@/components/GenerativeUIMockup";
+import { PremiumAreaChart, TimeSavedCard, QueryOptimizationCard, CohortTableMockup } from "@/components/MockChartCards";
+import { GradientMesh } from "@/components/ui/gradient-mesh";
 
 const READ_ONLY_LAYERS = [
-  "MCP server runs with MDB_MCP_READ_ONLY=true — write tools are stripped at startup.",
+  "MCP server runs with MDB_MCP_READ_ONLY=true — write tools are stripped.",
   "Onboarding recommends a read-only database user.",
-  "argus-result-set-guard blocks $out / $merge at the planner layer, before MongoDB sees them.",
+  "argus-result-set-guard blocks $out / $merge before execution.",
 ];
+
+const PremiumIcon = ({ icon: Icon, colorClass = "from-blue-600 to-indigo-600", shadowClass = "shadow-blue-500/30" }: any) => (
+  <div className={`flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr ${colorClass} shadow-lg ${shadowClass} mb-4 relative overflow-hidden group`}>
+    <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+    <Icon className="w-6 h-6 text-white relative z-10" />
+  </div>
+);
 
 export default function Landing() {
   return (
-    <main id="main-content" className="min-h-screen bg-argus-bg text-argus-text">
+    <main className="min-h-screen bg-white text-gray-900 selection:bg-blue-100 overflow-x-hidden relative">
+
       {/* Top nav */}
-      <header className="border-b border-argus-border bg-argus-bg-elevated/60 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-screen-xl items-center justify-between px-4">
-          <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold">
-            <span className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-argus-accent/10">
-              <Eye className="h-4 w-4 text-argus-accent" aria-hidden />
-            </span>
-            <span className="font-heading text-base">Argus</span>
+      <header className="relative border-b border-gray-100 bg-white/80 backdrop-blur-md z-50">
+        <div className="mx-auto flex h-20 max-w-screen-xl items-center justify-between px-6">
+          <Link href="/" className="inline-flex items-center gap-2.5 text-xl font-black tracking-tight group">
+            <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-blue-700 to-indigo-600 shadow-md shadow-blue-600/20 overflow-hidden">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.4),transparent)] pointer-events-none" />
+              <Eye className="h-4 w-4 text-white" strokeWidth={3} />
+            </div>
+            Argus
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-8">
+            <Link href="/connect" className="text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">Connect</Link>
+            <Link href="/dashboard" className="text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">Dashboard</Link>
+            <Link href="/chat" className="text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">Chat</Link>
+          </nav>
+          <div className="flex items-center">
             <Link
               href="/connect"
-              className="inline-flex h-9 items-center rounded-[8px] px-3 text-sm text-argus-text-muted transition-colors hover:bg-argus-bg-sunken hover:text-argus-text"
+              className="inline-flex h-10 items-center rounded-lg bg-gray-900 px-5 text-sm font-bold text-white shadow-sm hover:bg-black transition-all hover:shadow-md hover:-translate-y-0.5"
             >
-              Connect
+              Get Started
             </Link>
-            <Link
-              href="/dashboard"
-              className="inline-flex h-9 items-center rounded-[8px] px-3 text-sm text-argus-text-muted transition-colors hover:bg-argus-bg-sunken hover:text-argus-text"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/chat"
-              className="inline-flex h-9 items-center rounded-[8px] px-3 text-sm text-argus-text-muted transition-colors hover:bg-argus-bg-sunken hover:text-argus-text"
-            >
-              Chat
-            </Link>
-          </nav>
+          </div>
         </div>
       </header>
 
-      {/* Hero — full bleed, gradient mesh bg */}
-      <section className="argus-gradient-hero relative overflow-hidden border-b border-argus-border">
-        <div className="mx-auto max-w-screen-xl px-4 py-20 md:py-28">
-          <div className="grid gap-16 md:grid-cols-2 md:items-center">
-            <div className="animate-fade-in-up">
-              <p className="inline-flex items-center gap-1.5 rounded-full border border-argus-accent/20 bg-argus-accent/5 px-3 py-1 text-xs font-medium text-argus-accent">
-                <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
-                Three layers of write protection
-              </p>
-              <h1 className="mt-6 font-heading text-4xl font-bold leading-[1.1] tracking-tight md:text-5xl lg:text-6xl">
-                The all-seeing eye
-                <br />
-                <span className="text-argus-accent">for your MongoDB data.</span>
-              </h1>
-              <p className="mt-4 max-w-md text-base leading-relaxed text-argus-text-muted md:text-lg">
-                Paste a connection string. Argus samples the schema, generates a
-                draft dashboard, and lets you chat with your data — all without
-                ever writing to your cluster.
-              </p>
-              <div className="mt-8 flex flex-wrap items-center gap-3">
-                <Link
-                  href="/connect"
-                  className="group inline-flex h-12 items-center gap-2 rounded-[10px] bg-argus-accent px-6 text-sm font-semibold text-black transition-all duration-200 hover:scale-[1.02] hover:shadow-[0_0_24px_rgba(0,212,170,0.25)]"
-                >
-                  Connect your MongoDB
-                  <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden />
-                </Link>
-                <Link
-                  href="/chat"
-                  className="inline-flex h-12 items-center gap-2 rounded-[10px] border border-argus-border bg-argus-bg-elevated px-6 text-sm font-medium text-argus-text transition-all duration-200 hover:border-argus-text-muted hover:bg-argus-bg"
-                >
-                  Try the chat
-                </Link>
-              </div>
-            </div>
-
-            {/* Architecture diagram — reimagined as connected nodes */}
-            <div className="animate-fade-in-up argus-stagger-3 relative">
-              <div className="rounded-[16px] border border-argus-border bg-argus-bg-elevated/50 argus-glass p-8">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-argus-text-subtle">
-                  Architecture
-                </p>
-                <div className="mt-6 space-y-0">
-                  <ArchNode
-                    n={1}
-                    title="Vercel — Next.js"
-                    body="Tambo React SDK drives the generative UI. 7 Zod-validated cards."
-                    accent
-                  />
-                  <div className="flex justify-center py-1">
-                    <svg width="2" height="24" className="text-argus-border-strong" fill="currentColor">
-                      <line x1="1" y1="0" x2="1" y2="24" strokeWidth="2" stroke="currentColor" strokeDasharray="2 3" />
-                    </svg>
-                  </div>
-                  <ArchNode
-                    n={2}
-                    title="Cloud Run — Tambo"
-                    body="LLM: Gemini 3 Flash. Per-tenant mcp_manager + result_set_guard."
-                  />
-                  <div className="flex justify-center py-1">
-                    <svg width="2" height="24" className="text-argus-border-strong" fill="currentColor">
-                      <line x1="1" y1="0" x2="1" y2="24" strokeWidth="2" stroke="currentColor" strokeDasharray="2 3" />
-                    </svg>
-                  </div>
-                  <ArchNode
-                    n={3}
-                    title="Your MongoDB"
-                    body="Read-only user. No writes can reach the cluster."
-                    muted
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* Hero Section */}
+      <section className="relative mx-auto w-full px-6 pt-24 pb-16 md:pt-32 md:pb-32 overflow-hidden border-b border-gray-100">
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <GradientMesh
+            className="opacity-70"
+            colors={["#a78bfa", "#60a5fa", "#34d399"]}
+            speed={2.5}
+            scale={1.2}
+            distortion={6}
+            waveAmp={0.2}
+            waveFreq={5}
+            swirl={0.7}
+          />
+          <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-white to-transparent" />
         </div>
-      </section>
 
-      {/* 5 insight modules — glass cards with staggered reveal */}
-      <section className="border-b border-argus-border bg-argus-bg-sunken/50">
-        <div className="mx-auto max-w-screen-xl px-4 py-20">
-          <div className="mx-auto max-w-xl text-center">
-            <h2 className="font-heading text-3xl font-bold">Five insight modules</h2>
-            <p className="mt-3 text-argus-text-muted">
-              Each module is generated from the schema, then run as a MongoDB
-              aggregation. Ask in chat, or accept the planner&apos;s draft.
+        <div className="max-w-screen-xl mx-auto grid gap-16 md:grid-cols-2 md:items-center relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+          >
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200/50 bg-blue-50/50 backdrop-blur-sm px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm mb-6">
+              <Bot className="h-4 w-4" />
+              Your Instant AI Admin Dashboard
+            </div>
+            <h1 className="text-5xl font-extrabold leading-[1.1] tracking-tight md:text-6xl text-gray-900 drop-shadow-sm">
+              Connect your database.{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-br from-blue-700 to-indigo-600">
+                Get instant insights.
+              </span>
+            </h1>
+            <p className="mt-6 text-lg text-gray-600 leading-relaxed max-w-lg font-medium">
+              No setup. No queries to write. Argus connects directly to your MongoDB and instantly acts as a personalized, generative dashboard for your entire team.
             </p>
-          </div>
-          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {MODULES.map(({ Icon, title, blurb }, i) => (
-              <article
-                key={title}
-                className={cn(
-                  "group animate-fade-in-up rounded-[12px] border border-argus-border bg-argus-bg-elevated p-6 opacity-0 transition-all duration-300 hover:border-argus-accent/20 hover:shadow-[0_0_24px_rgba(0,212,170,0.06)]",
-                  `argus-stagger-${i + 1}`,
-                )}
-                style={{ animationFillMode: "forwards" }}
+            <div className="mt-8 flex flex-wrap items-center gap-4">
+              <Link
+                href="/connect"
+                className="inline-flex h-12 items-center gap-2 rounded-xl bg-blue-700 px-6 text-sm font-bold text-white shadow-xl shadow-blue-700/20 hover:bg-blue-800 transition-all hover:-translate-y-0.5 group"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-argus-accent/10 text-argus-accent transition-colors group-hover:bg-argus-accent/20">
-                  <Icon className="h-4.5 w-4.5" aria-hidden />
-                </div>
-                <h3 className="mt-5 font-heading text-base font-semibold">{title}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-argus-text-muted">{blurb}</p>
-              </article>
-            ))}
+                Connect your database
+                <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
+              <Link
+                href="/chat"
+                className="inline-flex h-12 items-center gap-2 rounded-xl border border-gray-200 bg-white/80 backdrop-blur-sm px-6 text-sm font-bold text-gray-900 shadow-sm hover:bg-white hover:border-gray-300 transition-colors"
+              >
+                View live demo
+              </Link>
+            </div>
+            <div className="mt-8 flex items-center gap-6 text-sm text-gray-500 font-bold">
+              <div className="flex items-center gap-1.5"><ShieldCheck className="w-5 h-5 text-emerald-500" /> Zero write risk</div>
+              <div className="flex items-center gap-1.5"><Cpu className="w-5 h-5 text-indigo-500" /> Generative UI</div>
+            </div>
+          </motion.div>
+
+          <div className="relative z-10 hidden md:block">
+            <GenerativeUIMockup />
           </div>
         </div>
       </section>
 
-      {/* How it works — 3-step flow */}
-      <section className="mx-auto max-w-screen-xl px-4 py-20">
-        <div className="mx-auto max-w-xl text-center">
-          <h2 className="font-heading text-3xl font-bold">From paste to first dashboard in 2–3 minutes</h2>
+      {/* Bento Grid Features */}
+      <section className="relative z-10 mx-auto max-w-screen-xl px-6 py-24 bg-gray-50/30">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl font-black tracking-tight text-gray-900">Make admins out of a dashboard, easily.</h2>
+          <p className="mt-4 text-gray-600 max-w-2xl mx-auto font-medium text-lg">
+            Stop building internal tools from scratch. Argus reads your schema and generates the charts, tables, and insights you need automatically.
+          </p>
         </div>
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
-          <HowStep n={1} title="Connect" body="Paste a connection string. We probe the cluster for reachability." />
-          <HowStep n={2} title="Sample" body="We sample the top 5 collections and feed the schema to the planner LLM." />
-          <HowStep n={3} title="Insight" body="You get a draft dashboard. Drag, drop, resize, or ask in chat for more." />
-        </div>
+
+        <BentoGrid>
+          <BentoGridItem
+            title="Real-time Generative Charts"
+            description="Ask questions in plain English. Argus generates beautiful, interactive charts specific to your schema without a single line of frontend code."
+            header={<PremiumAreaChart />}
+            icon={<PremiumIcon icon={Sparkles} />}
+            className="md:col-span-2"
+          />
+          <BentoGridItem
+            title="Zero Setup Time"
+            description="Skip the grueling process of wiring up a React frontend to your database."
+            header={<TimeSavedCard />}
+            icon={<PremiumIcon icon={TrendingUp} colorClass="from-amber-500 to-orange-500" shadowClass="shadow-orange-500/30" />}
+            className="md:col-span-1"
+          />
+          <BentoGridItem
+            title="No MQL Required"
+            description="Stop wrestling with dense aggregations. We handle indexing and execution."
+            header={<QueryOptimizationCard />}
+            icon={<PremiumIcon icon={Code2} colorClass="from-emerald-500 to-teal-500" shadowClass="shadow-emerald-500/30" />}
+            className="md:col-span-1"
+          />
+          <BentoGridItem
+            title="Personalized Insights"
+            description="Argus learns what matters to you. Whether it's cohort retention or daily active users, it builds the dashboard around your specific needs."
+            header={<CohortTableMockup />}
+            icon={<PremiumIcon icon={LayoutDashboard} colorClass="from-indigo-500 to-purple-500" shadowClass="shadow-indigo-500/30" />}
+            className="md:col-span-2 bg-gradient-to-br from-white to-indigo-50/30"
+          />
+        </BentoGrid>
       </section>
 
-      {/* Read-only banner */}
-      <section className="mx-auto max-w-screen-xl px-4 pb-20">
-        <div className="rounded-[16px] border border-argus-accent/15 bg-gradient-to-br from-argus-accent/[0.03] to-transparent p-8 md:p-10">
-          <h2 className="inline-flex items-center gap-2 font-heading text-lg font-semibold text-argus-accent">
-            <Lock className="h-4 w-4" aria-hidden />
-            Read-only by default. Three layers.
-          </h2>
-          <ul className="mt-5 grid gap-3 sm:grid-cols-3">
-            {READ_ONLY_LAYERS.map((layer, i) => (
-              <li key={i} className="flex gap-3 rounded-[10px] border border-argus-border bg-argus-bg-elevated/50 p-4 text-sm leading-relaxed text-argus-text-muted">
-                <span className="mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-argus-accent/10 text-[10px] font-bold text-argus-accent">
-                  {i + 1}
-                </span>
-                {layer}
-              </li>
-            ))}
-          </ul>
-        </div>
+      {/* Read-only Security Banner */}
+      <section className="mx-auto max-w-screen-xl px-6 py-24">
+        <motion.div
+          whileInView={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 20 }}
+          viewport={{ once: true }}
+          className="relative overflow-hidden rounded-3xl border border-emerald-100 bg-emerald-50/30 p-8 md:p-12 shadow-2xl shadow-emerald-900/5"
+        >
+          <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+            <ShieldCheck className="w-64 h-64 text-emerald-600" />
+          </div>
+          <div className="relative z-10 max-w-2xl">
+            <h2 className="inline-flex items-center gap-3 text-2xl md:text-3xl font-black text-emerald-950 tracking-tight">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 shadow-lg shadow-emerald-500/20">
+                <Lock className="h-7 w-7 text-white" />
+              </span>
+              Your production cluster is safe.
+            </h2>
+            <p className="mt-5 text-emerald-800/80 font-medium text-lg leading-relaxed">
+              We know the fear of connecting third-party tools to a live database. That&apos;s why Argus is built with three impenetrable layers of write-protection.
+            </p>
+            <ul className="mt-8 space-y-4 text-base text-emerald-900 font-medium">
+              {READ_ONLY_LAYERS.map((layer, i) => (
+                <li key={i} className="flex items-start gap-4 bg-white/60 p-4 rounded-xl border border-emerald-100/50 shadow-sm backdrop-blur-sm">
+                  <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-emerald-500 to-emerald-400 shadow-sm text-xs font-bold text-white mt-0.5">
+                    {i + 1}
+                  </span>
+                  <span className="leading-relaxed">{layer}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </motion.div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-argus-border">
-        <div className="mx-auto flex max-w-screen-xl flex-col items-start gap-2 px-4 py-8 text-xs text-argus-text-subtle md:flex-row md:items-center md:justify-between">
-          <p>© Argus. Built for the 2026 MongoDB AI Hackathon.</p>
-          <p>Open source, self-hosted, free.</p>
+      <footer className="border-t border-gray-100 bg-white">
+        <div className="mx-auto flex max-w-screen-xl flex-col items-center gap-4 px-6 py-12 md:flex-row md:justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex h-6 w-6 items-center justify-center rounded bg-gray-900">
+              <Eye className="h-3 w-3 text-white" strokeWidth={3} />
+            </div>
+            <p className="text-sm font-bold text-gray-500">© 2026 Argus AI. Built for the MongoDB AI Hackathon.</p>
+          </div>
+          <div className="flex gap-6 text-sm font-bold text-gray-500">
+            <Link href="#" className="hover:text-gray-900 transition-colors">GitHub</Link>
+            <Link href="#" className="hover:text-gray-900 transition-colors">Documentation</Link>
+            <Link href="#" className="hover:text-gray-900 transition-colors">Architecture</Link>
+          </div>
         </div>
       </footer>
     </main>
-  );
-}
-
-function ArchNode({
-  n,
-  title,
-  body,
-  muted,
-  accent,
-}: {
-  n: number;
-  title: string;
-  body: string;
-  muted?: boolean;
-  accent?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-[12px] border p-5 transition-all duration-200",
-        muted && "border-dashed border-argus-border bg-argus-bg-sunken/30",
-        accent && "border-argus-accent/15 bg-argus-accent/[0.02]",
-        !muted && !accent && "border-argus-border bg-argus-bg-elevated",
-      )}
-    >
-      <div className="flex items-center gap-3">
-        <span className={cn(
-          "inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[11px] font-bold",
-          accent ? "bg-argus-accent/20 text-argus-accent" : "bg-argus-bg-sunken text-argus-text-subtle",
-        )}>
-          {n}
-        </span>
-        <p className="text-sm font-semibold">{title}</p>
-      </div>
-      <p className="mt-1.5 text-xs leading-relaxed text-argus-text-muted">{body}</p>
-    </div>
-  );
-}
-
-function HowStep({ n, title, body }: { n: number; title: string; body: string }) {
-  return (
-    <div className="animate-fade-in-up rounded-[12px] border border-argus-border bg-argus-bg-elevated p-6 opacity-0"
-      style={{ animationDelay: `${n * 0.15}s`, animationFillMode: "forwards" }}>
-      <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-argus-accent/10 text-sm font-bold text-argus-accent">
-        {n}
-      </span>
-      <h3 className="mt-4 font-heading text-base font-semibold">{title}</h3>
-      <p className="mt-1.5 text-sm leading-relaxed text-argus-text-muted">{body}</p>
-    </div>
   );
 }
