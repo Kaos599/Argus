@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { Loader2, Lock, Send, Sparkles, User } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { TopBar } from "@/components/TopBar";
 import { CardRenderer } from "@/cards";
 import { useChat } from "@/lib/chat";
@@ -139,13 +141,16 @@ function Message({ message }: { message: ReturnType<typeof useChat>["messages"][
         {message.content && (
           <div
             className={cn(
-              "rounded-[12px] border px-4 py-3 text-sm leading-relaxed",
+              "prose prose-sm prose-invert max-w-none rounded-[12px] border px-4 py-3 text-sm leading-relaxed",
               isUser
                 ? "border-argus-accent/20 bg-argus-accent/[0.04] text-argus-text"
                 : "border-argus-border bg-argus-bg-elevated text-argus-text",
+              "prose-code:rounded prose-code:bg-argus-bg-sunken prose-code:px-1 prose-code:py-0.5 prose-code:text-xs prose-code:font-mono prose-code:text-argus-accent prose-strong:text-argus-text prose-headings:text-argus-text",
             )}
           >
-            {message.content}
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {message.content}
+            </ReactMarkdown>
           </div>
         )}
         {message.card && (

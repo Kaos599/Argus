@@ -4,11 +4,13 @@ For each question, we pattern-match the intent, generate an MQL pipeline
 against the user's actual MongoDB (via the session's MCP subprocess), and
 return a human-readable response with an optional CardDescriptor.
 
-The 5 intent categories mirror the frontend mock chat in chat.ts:
+The intent categories are:
   - count users       → StatCard
   - top countries     → BarChartCard
   - daily signups     → TimeSeriesCard
-  - anomalies         → SummaryCard
+  - schema summary    → SummaryCard
+  - anomalies         → SummaryCard / TimeSeriesCard
+  - top spenders      → TableCard
   - drop/delete       → ErrorCard (read-only refusal)
 
 If the intent doesn't match any category, we fall back to the LLM for
@@ -127,6 +129,10 @@ async def query(
         if _is_time_series_intent(message):
             return await _handle_time_series(token, database, sampled_schema, mcp)
 
+        # --- Schema summary ---
+        if _is_schema_intent(message):
+            return await _handle_schema_summary(sampled_schema)
+
         # --- Anomalies / insights ---
         if _is_anomalies_intent(message):
             return await _handle_anomalies(token, database, sampled_schema, mcp)
@@ -176,11 +182,15 @@ def _is_time_series_intent(message: str) -> bool:
 
 
 def _is_anomalies_intent(message: str) -> bool:
-    return any(k in message for k in ("anomal", "insight", "what", "interesting", "unusual"))
+    return any(k in message for k in ("anomal", "insight", "interesting", "unusual"))
 
 
 def _is_table_intent(message: str) -> bool:
     return any(k in message for k in ("spend", "top users", "table", "list", "highest"))
+
+
+def _is_schema_intent(message: str) -> bool:
+    return any(k in message for k in ("collection", "schema", "what's in my database", "summarize"))
 
 
 # =========================================================================
@@ -446,6 +456,46 @@ async def _handle_table(
                 "enableSearch": True,
                 "enableExport": True,
             },
+        ),
+    )
+
+
+async def _handle_schema_summary(
+    sampled_schema: dict,
+) -> QueryResponse:
+    from argus.llm.prompts import _summarize_schema
+
+    if not sampled_schema:
+        return QueryResponse(
+            content="No schema sample is available. Try reconnecting to your database first."
+        )
+    summary_text = _summarize_schema(sampled_schema)
+    total_docs = sum(
+        v.get("doc_count", 0) for v in sampled_schema.values() if isinstance(v, dict)
+    )
+    coll_count = len(sampled_schema)
+    findings = [
+        SummaryFinding(
+            text=f"{name}: {v.get('doc_count', 0)} docs, fields: {', '.join(str(f) for f in (v.get('sample_fields') or [])[:5])}",
+            severity=SummaryFindingSeverity.INFO,
+            metric=name,
+        )
+        for name, v in sampled_schema.items()
+        if isinstance(v, dict)
+    ]
+    return QueryResponse(
+        content=(
+            f"Your database has **{coll_count} collection{'s' if coll_count != 1 else ''}** "
+            f"with a total of **{total_docs:,} documents** across all collections.\n\n"
+            f"{summary_text}"
+        ),
+        card=CardDescriptor(
+            componentName=CardName.SUMMARY_CARD,
+            props=SummaryCardProps(
+                title=f"Schema overview ({coll_count} collections)",
+                summary=f"{total_docs:,} total documents across {coll_count} collections",
+                findings=findings,
+            ).model_dump(by_alias=True, exclude_none=False),
         ),
     )
 
