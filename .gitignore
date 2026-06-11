@@ -192,6 +192,3 @@ docker-compose.override.yml
 *.pem
 *.key
 secrets/
-
-# git worktrees (isolated workspaces)
-.worktrees/
