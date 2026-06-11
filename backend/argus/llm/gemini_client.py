@@ -190,7 +190,8 @@ class GeminiClient:
         if not self._api_key:
             raise RuntimeError("GEMINI_API_KEY is not set")
         # Lazy import — keeps tests light.
-        import google.generativeai as genai  # type: ignore[import-untyped]
+        from google import genai
+          # type: ignore[import-untyped]
 
         genai.configure(api_key=self._api_key)
         for name in self._model_names:
