@@ -82,9 +82,15 @@ async def refresh(
         any_ok = False
         for module in candidates:
             try:
-                pipeline = module.generate_pipeline(session.sampled_schema, {})
+                collection = module.required_collections[0]
+                from argus.insights.pipeline_utils import get_collection_fields
+                coll_fields = get_collection_fields(session.sampled_schema, collection)
+                pipeline = module.generate_pipeline(
+                    session.sampled_schema,
+                    {"collection": collection, "fields": coll_fields or []},
+                )
                 args = {
-                    "collection": module.required_collections[0],
+                    "collection": collection,
                     "pipeline": pipeline,
                 }
                 if database:
@@ -96,6 +102,7 @@ async def refresh(
                 )
                 docs = _extract_documents(result)
                 descriptor = module.render_card(docs, {})
+                descriptor.module = module.name.value
                 new_cards.append(descriptor.model_dump(by_alias=True))
                 any_ok = True
                 refreshed += 1

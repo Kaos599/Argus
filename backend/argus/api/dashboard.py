@@ -115,8 +115,13 @@ async def add_card(
         ) from exc
 
     collection = request.collection or _default_collection_for(request.module)
-    params = request.params or {}
+    params = dict(request.params or {})
+    params.setdefault("collection", collection)
     sampled_schema = session.sampled_schema or {}
+    from argus.insights.pipeline_utils import get_collection_fields as _gcf
+    coll_fields = _gcf(sampled_schema, collection)
+    if coll_fields:
+        params.setdefault("fields", coll_fields)
     insight = get_module(request.module)
 
     try:
