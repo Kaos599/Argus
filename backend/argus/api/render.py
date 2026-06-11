@@ -24,6 +24,7 @@ from argus.api.dependencies import get_mcp_manager, get_session_store
 from argus.guard.result_set_guard import GuardViolation, redact_connection_string
 from argus.insights.card_renderer import get_module
 from argus.mcp.manager import McpManager
+from argus.api.sample import _infer_database
 from argus.models.api_types import (
     CardDescriptor,
     ErrorCode,
@@ -88,7 +89,7 @@ async def render(
         )
 
     return StreamingResponse(
-        _event_stream(token, plan_id, plan_steps, mcp),
+        _event_stream(token, plan_id, plan_steps, mcp, store, session),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -103,6 +104,8 @@ async def _event_stream(
     plan_id: str,
     plan_steps: list[dict],
     mcp: McpManager,
+    store: SessionStore,
+    session: object,
 ) -> AsyncIterator[str]:
     """Yield SSE-formatted event lines for a plan."""
     total = len(plan_steps)
@@ -110,6 +113,7 @@ async def _event_stream(
     yield _format_event("progress", progress.model_dump(by_alias=True))
 
     completed = 0
+    generated_cards = []
     for step in plan_steps:
         module_name_str = step.get("module")
         collection = step.get("collection")
@@ -138,14 +142,20 @@ async def _event_stream(
 
         # Run the pipeline through the MCP subprocess. The guard is
         # applied inside McpSubprocess.call_tool.
+        database = _infer_database(session.connection_string) if getattr(session, "connection_string", None) else None
+        
         try:
+            args = {
+                "collection": collection,
+                "pipeline": pipeline,
+            }
+            if database:
+                args["database"] = database
+                
             result = await mcp.call_tool(
                 token,
                 "mongodb_aggregate",
-                {
-                    "collection": collection,
-                    "pipeline": pipeline,
-                },
+                args,
             )
             # The MCP server returns ``{"documents": [...]}`` (or
             # sometimes a bare list). Normalize to a list.
@@ -187,8 +197,8 @@ async def _event_stream(
 
         # Render the card.
         try:
-            module = get_module(module_name)
-            descriptor = module.render_card(docs, params)
+            insight = get_module(module_name)
+            descriptor = insight.render_card(docs, params)
         except Exception as exc:
             logger.exception("render_card failed for module=%s", module_name.value)
             descriptor = CardDescriptor.error(
@@ -196,10 +206,20 @@ async def _event_stream(
                 title=f"{module_name.value.title()} render error",
                 is_retryable=True,
             )
+        descriptor.module = module_name.value
 
-        yield _format_event("card", descriptor.model_dump(by_alias=True))
+        card_dict = descriptor.model_dump(by_alias=True)
+        generated_cards.append(card_dict)
+        yield _format_event("card", card_dict)
         completed += 1
         yield _format_event("progress", {"completed": completed, "total": total})
+
+    if generated_cards:
+        try:
+            new_cards = list(session.cards) + generated_cards
+            await store.update(token, cards=new_cards)
+        except Exception as exc:
+            logger.exception("Failed to save cards to session: %s", exc)
 
     yield _format_event("done", {"plan_id": plan_id})
 

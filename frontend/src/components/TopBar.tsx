@@ -36,21 +36,23 @@ export function TopBar() {
   const status = healthState?.status ?? "ok";
   const statusColor =
     status === "ok"
-      ? "bg-argus-accent"
+      ? "bg-argus-accent shadow-[0_0_6px_rgba(0,212,170,0.3)]"
       : status === "degraded"
         ? "bg-argus-warning"
         : "bg-argus-danger";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-argus-border bg-argus-bg-elevated/95 backdrop-blur supports-[backdrop-filter]:bg-argus-bg-elevated/80">
+    <header className="sticky top-0 z-40 border-b border-argus-border bg-argus-bg-elevated/80 backdrop-blur-xl supports-[backdrop-filter]:bg-argus-bg-elevated/60">
       <div className="mx-auto flex h-14 max-w-screen-2xl items-center justify-between gap-4 px-4">
         <div className="flex items-center gap-4">
           <Link
             href="/"
             className="inline-flex items-center gap-2 text-sm font-semibold text-argus-text"
           >
-            <Eye className="h-5 w-5 text-argus-primary" aria-hidden />
-            <span>Argus</span>
+            <span className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-argus-accent/10 argus-glow-accent">
+              <Eye className="h-4 w-4 text-argus-accent" aria-hidden />
+            </span>
+            <span className="font-heading text-base">Argus</span>
           </Link>
           <nav aria-label="Primary" className="hidden md:block">
             <ul className="flex items-center gap-1">
@@ -62,14 +64,17 @@ export function TopBar() {
                       href={href}
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "inline-flex h-9 items-center gap-1.5 rounded-sm px-3 text-sm transition-colors",
+                        "relative inline-flex h-9 items-center gap-1.5 rounded-[8px] px-3 text-sm transition-colors",
                         active
-                          ? "bg-argus-bg-sunken text-argus-text"
-                          : "text-argus-text-muted hover:bg-argus-bg-sunken hover:text-argus-text",
+                          ? "text-argus-text"
+                          : "text-argus-text-muted hover:text-argus-text",
                       )}
                     >
-                      <Icon className="h-4 w-4" aria-hidden />
-                      {label}
+                      {active && (
+                        <span className="absolute inset-0 rounded-[8px] bg-argus-bg-sunken" />
+                      )}
+                      <Icon className="relative h-4 w-4" aria-hidden />
+                      <span className="relative">{label}</span>
                     </Link>
                   </li>
                 );
@@ -84,12 +89,12 @@ export function TopBar() {
               className="hidden items-center gap-2 text-xs text-argus-text-muted md:flex"
               title={`Session: ${token}`}
             >
-              <Database className="h-3.5 w-3.5" aria-hidden />
+              <Database className="h-3.5 w-3.5 text-argus-accent" aria-hidden />
               <span className="font-mono">{token.slice(0, 8)}…</span>
               <button
                 type="button"
                 onClick={clear}
-                className="rounded-sm px-2 py-0.5 hover:bg-argus-bg-sunken hover:text-argus-text"
+                className="rounded-[6px] px-2 py-0.5 text-argus-text-subtle transition-colors hover:bg-argus-bg-sunken hover:text-argus-text"
               >
                 Disconnect
               </button>
@@ -97,13 +102,10 @@ export function TopBar() {
           )}
 
           <div
-            className="inline-flex items-center gap-1.5 rounded-full border border-argus-border bg-argus-bg px-2 py-1 text-xs"
+            className="inline-flex items-center gap-1.5 rounded-full border border-argus-border bg-argus-bg px-2.5 py-1 text-xs"
             aria-label={`System status: ${status}`}
           >
-            <span
-              className={cn("h-1.5 w-1.5 rounded-full", statusColor)}
-              aria-hidden
-            />
+            <span className={cn("h-1.5 w-1.5 rounded-full", statusColor)} aria-hidden />
             <span className="text-argus-text-muted">{status}</span>
           </div>
 
@@ -111,12 +113,12 @@ export function TopBar() {
 
           <button
             type="button"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-sm text-argus-text-muted hover:bg-argus-bg-sunken md:hidden"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-[8px] text-argus-text-muted hover:bg-argus-bg-sunken md:hidden"
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((v) => !v)}
           >
-            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
         </div>
       </div>
@@ -135,7 +137,7 @@ export function TopBar() {
                     href={href}
                     onClick={() => setMenuOpen(false)}
                     className={cn(
-                      "flex h-11 items-center gap-2 rounded-sm px-3 text-sm",
+                      "flex h-11 items-center gap-2 rounded-[8px] px-3 text-sm",
                       active
                         ? "bg-argus-bg-sunken text-argus-text"
                         : "text-argus-text-muted hover:bg-argus-bg-sunken hover:text-argus-text",
@@ -159,7 +161,7 @@ export function TopBar() {
                     clear();
                     setMenuOpen(false);
                   }}
-                  className="flex h-11 w-full items-center gap-2 rounded-sm px-3 text-left text-sm text-argus-text-muted hover:bg-argus-bg-sunken"
+                  className="flex h-11 w-full items-center gap-2 rounded-[8px] px-3 text-left text-sm text-argus-text-muted hover:bg-argus-bg-sunken"
                 >
                   Disconnect
                 </button>

@@ -209,9 +209,7 @@ RenderEventName = Literal["progress", "card", "error", "done"]
 
 
 class LayoutItem(BaseModel):
-    """One item in a react-grid-layout — index + position + size."""
-
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     i: str
     x: int = Field(..., ge=0)
@@ -296,6 +294,25 @@ class RefreshResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# POST /api/v1/query
+# ---------------------------------------------------------------------------
+
+
+class QueryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    session_token: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1)
+
+
+class QueryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    content: str
+    card: CardDescriptor | None = None
+
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/health
 # ---------------------------------------------------------------------------
 
@@ -363,6 +380,9 @@ __all__ = [
     # Refresh
     "RefreshRequest",
     "RefreshResponse",
+    # Query
+    "QueryRequest",
+    "QueryResponse",
     # Health
     "HealthResponse",
     "HealthStatus",

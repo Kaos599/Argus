@@ -63,6 +63,13 @@ def redact_connection_string(text: str) -> str:
 # Stages that would persist data outside the read-only boundary. We
 # reject the whole pipeline if any of these appear.
 _FORBIDDEN_STAGES: frozenset[str] = frozenset({"$out", "$merge"})
+_QUERY_TOOLS: frozenset[str] = frozenset({"mongodb_find", "mongodb_aggregate"})
+_PASSTHROUGH_TOOLS: frozenset[str] = frozenset(
+    {
+        "mongodb_list_collections",
+        "mongodb_collection_schema",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -313,6 +320,22 @@ def guard_tool_call(
 
     Raises ``GuardViolation`` on any failure.
     """
+    if not isinstance(args, dict):
+        raise GuardViolation(
+            code=ErrorCode.INVALID_INPUT,
+            message="Tool args must be a JSON object",
+            technical_details=f"Got: {type(args).__name__}",
+        )
+
+    if tool_name in _PASSTHROUGH_TOOLS:
+        return dict(args)
+
+    if tool_name not in _QUERY_TOOLS:
+        raise GuardViolation(
+            code=ErrorCode.INVALID_INPUT,
+            message=f"Tool {tool_name!r} is not allowed by the result-set guard",
+        )
+
     safe_args = enforce_limit(args, max_documents=max_documents)
     pipeline = safe_args.get("pipeline")
     if isinstance(pipeline, list):

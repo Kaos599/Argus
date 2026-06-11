@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useTambo, useTamboThreadInput } from "@tambo-ai/react";
-import type { ReactTamboThreadMessage } from "@tambo-ai/react";
+import { query } from "@/lib/api";
 import type { CardDescriptorType } from "@/types/api";
+
 
 export type ChatMessage = {
   id: string;
@@ -27,9 +27,12 @@ const SUGGESTIONS = [
 ];
 
 /**
- * A unified chat hook that works in both real (Tambo) and mock mode.
- * In mock mode, it pattern-matches the user's message against a set of
- * canned responses to simulate the Tambo agent picking the right card.
+ * A unified chat hook that queries the Argus backend API
+ * (POST /api/v1/query) with the user's natural-language question.
+ * In mock mode, it pattern-matches against canned responses.
+ *
+ * In real mode, the backend uses the LLM + MCP to run actual MQL
+ * pipelines against the user's MongoDB and returns real results.
  */
 export function useChat(): {
   messages: ChatMessage[];
@@ -39,48 +42,87 @@ export function useChat(): {
   isStreaming: boolean;
   suggestions: string[];
 } {
-  // USE_MOCK is a module constant (env vars are read once at module load and
-  // never mutated in production). Branching on it here is safe at runtime,
-  // but eslint cannot prove that — the two paths below are the only two
-  // hook orders this function will ever produce.
-  /* eslint-disable react-hooks/rules-of-hooks */
   if (USE_MOCK) return useMockChat();
-  const { messages, isStreaming } = useTambo();
-  const { value, setValue, submit } = useTamboThreadInput();
-  /* eslint-enable react-hooks/rules-of-hooks */
+  return useBackendChat();
+}
+
+/* ============================================================
+   Backend chat — calls POST /api/v1/query with real MQL execution.
+   ============================================================ */
+
+function useBackendChat() {
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "welcome",
+      role: "assistant",
+      content:
+        "Hi! I'm Argus, your agentic analyst for MongoDB. Ask me anything about your data. Try one of the suggestions below to get started.",
+    },
+  ]);
+  const [value, setValue] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  const handleSubmit = useCallback(async () => {
+    const text = value.trim();
+    if (!text) return;
+    const token = typeof window !== "undefined" ? window.localStorage.getItem("argus-session-token") : null;
+    if (!token) {
+      setMessages((m) => [
+        ...m,
+        {
+          id: `u-${Date.now()}`,
+          role: "user",
+          content: text,
+        },
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          content: "No session found. Please connect to your database first.",
+        },
+      ]);
+      setValue("");
+      return;
+    }
+    const userMsg: ChatMessage = {
+      id: `u-${Date.now()}`,
+      role: "user",
+      content: text,
+    };
+    setMessages((m) => [...m, userMsg]);
+    setValue("");
+    setIsStreaming(true);
+
+    try {
+      const res = await query({ session_token: token, message: text });
+      const assistantMsg: ChatMessage = {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        content: res.content,
+        card: res.card,
+      };
+      setMessages((m) => [...m, assistantMsg]);
+    } catch {
+      setMessages((m) => [
+        ...m,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          content: "Sorry, I couldn't reach the backend. Make sure the server is running.",
+        },
+      ]);
+    } finally {
+      setIsStreaming(false);
+    }
+  }, [value]);
+
   return {
-    messages: toChatMessages(messages),
+    messages,
     value,
     setValue: (v: string) => setValue(v),
-    submit: async () => {
-      await submit();
-    },
+    submit: handleSubmit,
     isStreaming,
     suggestions: SUGGESTIONS,
   };
-}
-
-function toChatMessages(messages: ReactTamboThreadMessage[]): ChatMessage[] {
-  return messages.map((m) => {
-    const text = m.content
-      ?.filter((c) => c.type === "text")
-      .map((c) => ("text" in c ? c.text : ""))
-      .join("\n");
-    const component = m.content?.find(
-      (c) => c.type === "component",
-    ) as { renderedComponent?: React.ReactNode; props?: Record<string, unknown> } | undefined;
-    return {
-      id: m.id,
-      role: (m.role === "user" ? "user" : "assistant") as "user" | "assistant",
-      content: text ?? "",
-      card: component
-        ? {
-            componentName: "StatCard",
-            props: component.props ?? {},
-          }
-        : undefined,
-    };
-  });
 }
 
 /* ============================================================

@@ -75,7 +75,7 @@ export const TableCardProps = z.object({
     sortable: z.boolean().default(true),
     align: z.enum(['left', 'center', 'right']).default('left'),
   })).min(1).max(10),
-  rows: z.array(z.record(z.union([z.string(), z.number(), z.null()]))).min(1).max(1000),
+  rows: z.array(z.any()).min(1).max(1000),
   pageSize: z.number().min(10).max(100).default(25),
   enableSearch: z.boolean().default(true),
   enableExport: z.boolean().default(true),
@@ -122,6 +122,7 @@ export const CardName = z.enum([
 export const CardDescriptor = z.object({
   componentName: CardName,
   props: z.record(z.unknown()),
+  module: z.string().optional(),
 });
 
 export type StatCardPropsType = z.infer<typeof StatCardProps>;
@@ -249,6 +250,18 @@ export const RefreshResponse = z.object({
 });
 export type RefreshRequestType = z.infer<typeof RefreshRequest>;
 export type RefreshResponseType = z.infer<typeof RefreshResponse>;
+
+// POST /api/v1/query
+export const QueryRequest = z.object({
+  session_token: z.string().min(1),
+  message: z.string().min(1),
+});
+export const QueryResponse = z.object({
+  content: z.string(),
+  card: CardDescriptor.optional(),
+});
+export type QueryRequestType = z.infer<typeof QueryRequest>;
+export type QueryResponseType = z.infer<typeof QueryResponse>;
 
 // GET /api/v1/health
 export const HealthResponse = z.object({

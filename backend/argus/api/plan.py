@@ -88,6 +88,13 @@ async def plan(
         if not collection:
             continue
         params = step.get("params") or {}
+        # Inject collection name and its field list into params so
+        # the module's generate_pipeline() can map fields dynamically.
+        params["collection"] = collection
+        from argus.insights.pipeline_utils import get_collection_fields
+        coll_fields = get_collection_fields(sampled_schema, collection)
+        if coll_fields:
+            params["fields"] = coll_fields
         try:
             from argus.insights.card_renderer import get_module
 

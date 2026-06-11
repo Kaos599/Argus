@@ -1,0 +1,17 @@
+# syntax=docker/dockerfile:1.7
+# Standalone image for the MongoDB MCP server binary only.
+# Use this to build an image that contains mongodb-mcp-server.
+
+FROM node:20-slim
+
+ARG MCP_SERVER_VERSION=1.11.0
+
+RUN npm install -g "mongodb-mcp-server@${MCP_SERVER_VERSION}"
+
+ENV PATH="/usr/local/bin:${PATH}"
+WORKDIR /app
+
+# The backend itself spawns mongodb-mcp-server subprocesses,
+# so this image is useful for validating the binary or running
+# MCP in a containerized environment.
+CMD ["mongodb-mcp-server", "--transport", "http", "--httpHost", "127.0.0.1", "--httpPort", "31234", "--readOnly"]

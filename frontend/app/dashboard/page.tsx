@@ -66,6 +66,20 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(async () => {
+      try {
+        await refresh({ session_token: token });
+        const fresh = await getDashboard(token);
+        setDashboard(fresh);
+      } catch {
+        // swallow errors; next interval will retry
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [token]);
+
   async function handleLayoutChange(_currentLayout: unknown, allLayouts: unknown) {
     if (!token || !dashboard) return;
     const layouts = allLayouts as DashboardResponseType["layout"];
@@ -87,6 +101,8 @@ export default function DashboardPage() {
       await refresh({ session_token: token });
       const fresh = await getDashboard(token);
       setDashboard(fresh);
+    } catch {
+      // If refresh or re-fetch fails, the existing dashboard stays intact.
     } finally {
       setRefreshing(false);
     }
@@ -104,7 +120,7 @@ export default function DashboardPage() {
           ? {
               ...d,
               cards: [...d.cards, res.card],
-              layout: appendLayoutItem(d.layout, `card-${Date.now()}`),
+              layout: appendLayoutItem(d.layout, res.card_id),
             }
           : d,
       );
@@ -118,9 +134,9 @@ export default function DashboardPage() {
       <>
         <TopBar />
         <main className="mx-auto max-w-md px-4 py-16 text-center">
-          <h1 className="text-2xl font-bold">No session</h1>
+          <h1 className="font-heading text-2xl font-bold">No session</h1>
           <p className="mt-2 text-argus-text-muted">
-            Start at the <Link href="/connect" className="text-argus-primary hover:underline">connect page</Link>.
+            Start at the <Link href="/connect" className="text-argus-accent hover:underline">connect page</Link>.
           </p>
         </main>
       </>
@@ -153,12 +169,11 @@ export default function DashboardPage() {
     <>
       <TopBar />
       <main id="main-content" className="mx-auto max-w-screen-2xl px-4 py-6">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold">Dashboard</h1>
-            <p className="text-sm text-argus-text-muted">
-              {dashboard.cards.length} cards · drag the header to move, drag the
-              bottom-right corner to resize.
+            <h1 className="font-heading text-2xl font-bold">Dashboard</h1>
+            <p className="mt-0.5 text-sm text-argus-text-muted">
+              {dashboard.cards.length} cards
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -166,7 +181,7 @@ export default function DashboardPage() {
               type="button"
               onClick={handleRefresh}
               disabled={refreshing}
-              className="inline-flex h-11 items-center gap-2 rounded-md border border-argus-border bg-argus-bg px-4 text-sm text-argus-text hover:bg-argus-bg-elevated disabled:opacity-50"
+              className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-argus-border bg-argus-bg-elevated px-4 text-sm text-argus-text transition-all hover:border-argus-text-muted disabled:opacity-50"
             >
               <RefreshCw
                 className={cn("h-4 w-4", refreshing && "animate-spin")}
@@ -177,7 +192,7 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => setShowAddCard((v) => !v)}
-              className="inline-flex h-11 items-center gap-2 rounded-md bg-argus-primary px-4 text-sm font-semibold text-argus-primary-fg hover:opacity-90"
+              className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-argus-accent px-4 text-sm font-semibold text-black transition-all hover:scale-[1.02]"
             >
               <Plus className="h-4 w-4" aria-hidden />
               Add card
@@ -186,7 +201,7 @@ export default function DashboardPage() {
         </div>
 
         {showAddCard && (
-          <Card className="mb-4">
+          <Card className="mb-6" surface="elevated">
             <p className="text-sm font-medium">Add a card</p>
             <p className="text-xs text-argus-text-muted">
               Pick an insight module. The planner will generate a card.
@@ -197,7 +212,7 @@ export default function DashboardPage() {
                   key={m}
                   type="button"
                   onClick={() => handleAddCard(m)}
-                  className="rounded-sm border border-argus-border bg-argus-bg px-3 py-1 text-xs capitalize text-argus-text hover:border-argus-primary hover:text-argus-primary"
+                  className="rounded-[8px] border border-argus-border bg-argus-bg px-3 py-1.5 text-xs capitalize text-argus-text transition-colors hover:border-argus-accent hover:text-argus-accent"
                 >
                   {m}
                 </button>
@@ -207,15 +222,17 @@ export default function DashboardPage() {
         )}
 
         {dashboard.cards.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-argus-border bg-argus-bg-elevated p-12 text-center">
-            <h2 className="text-lg font-semibold">No cards yet</h2>
+          <div className="flex flex-col items-center justify-center rounded-[16px] border border-dashed border-argus-border bg-argus-bg-elevated/50 p-16 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-[12px] bg-argus-accent/10">
+              <Plus className="h-5 w-5 text-argus-accent" aria-hidden />
+            </div>
+            <h2 className="mt-4 font-heading text-lg font-semibold">No cards yet</h2>
             <p className="mt-1 text-sm text-argus-text-muted">
-              Add a card above, or go through onboarding to generate a starter
-              set.
+              Add a card above, or go through onboarding to generate a starter set.
             </p>
             <Link
               href="/onboarding"
-              className="mt-4 inline-flex h-11 items-center rounded-md bg-argus-primary px-5 text-sm font-semibold text-argus-primary-fg hover:opacity-90"
+              className="mt-6 inline-flex h-10 items-center rounded-[10px] bg-argus-accent px-5 text-sm font-semibold text-black transition-all hover:scale-[1.02]"
             >
               Start onboarding
             </Link>
@@ -236,19 +253,7 @@ export default function DashboardPage() {
             compactType="vertical"
           >
             {dashboard.cards.map((descriptor, i) => (
-              <div
-                key={`card-${i}`}
-                className="group"
-                data-grid={{
-                  i: `card-${i}`,
-                  x: 0,
-                  y: 0,
-                  w: 4,
-                  h: 4,
-                  minW: 2,
-                  minH: 3,
-                }}
-              >
+              <div key={`card-${i}`} className="group">
                 <DraggableCardWrapper descriptor={descriptor} />
               </div>
             ))}
@@ -263,7 +268,13 @@ function DraggableCardWrapper({ descriptor }: { descriptor: CardDescriptorType }
   return (
     <div className="relative h-full w-full">
       <div
-        className="card-drag-handle absolute inset-x-0 top-0 z-10 h-3 cursor-move opacity-0 transition-opacity group-hover:opacity-100"
+        className="card-drag-handle absolute inset-x-0 top-0 z-10 h-4 cursor-move rounded-t-[10px] opacity-0 transition-opacity group-hover:opacity-100"
+        style={{
+          background: "linear-gradient(180deg, var(--argus-accent) 0%, transparent 100%)",
+          opacity: 0,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.15"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.opacity = "0"; }}
         aria-label="Drag to reorder"
         role="button"
         tabIndex={0}

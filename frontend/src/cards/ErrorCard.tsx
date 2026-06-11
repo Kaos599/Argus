@@ -70,14 +70,14 @@ export function ErrorCard({
         isFullPageActive && "max-w-2xl",
         "border",
         severity === "error"
-          ? "border-argus-danger bg-argus-danger-bg/30 dark:bg-argus-danger-bg/20"
-          : "border-argus-warning bg-argus-warning-bg/30 dark:bg-argus-warning-bg/20",
+          ? "border-argus-danger bg-argus-danger-bg/20"
+          : "border-argus-warning bg-argus-warning-bg/20",
       )}
     >
-      <div className="flex items-start gap-3 p-4">
+      <div className="flex items-start gap-4 p-5">
         <div
           className={cn(
-            "mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full",
+            "mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[10px]",
             severity === "error"
               ? "bg-argus-danger text-white"
               : "bg-argus-warning text-white",
@@ -92,15 +92,15 @@ export function ErrorCard({
         </div>
 
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-argus-text">{title}</h3>
-          <p className="mt-1 text-sm text-argus-text">{message}</p>
+          <h3 className="font-heading text-sm font-semibold text-argus-text">{title}</h3>
+          <p className="mt-1.5 text-sm leading-relaxed text-argus-text">{message}</p>
 
           {guidance && (
             <p className="mt-2 text-sm text-argus-text-muted">{guidance}</p>
           )}
 
           {isReadOnly && (
-            <div className="mt-3 rounded-sm border border-argus-danger/40 bg-argus-bg-elevated p-3">
+            <div className="mt-4 rounded-[10px] border border-argus-danger/30 bg-argus-bg-elevated p-4">
               <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-argus-danger">
                 <ShieldOff className="h-3.5 w-3.5" aria-hidden />
                 Argus is read-only by design.
@@ -109,10 +109,10 @@ export function ErrorCard({
                 This is not a bug — Argus can never write to your data. Here is
                 why:
               </p>
-              <ol className="mt-2 space-y-2 text-xs text-argus-text">
+              <ol className="mt-3 space-y-3 text-xs text-argus-text">
                 {READ_ONLY_LAYERS.map((layer) => (
-                  <li key={layer.n} className="flex gap-2">
-                    <span className="mt-0.5 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-argus-primary text-[10px] font-bold text-argus-primary-fg">
+                  <li key={layer.n} className="flex gap-2.5">
+                    <span className="mt-0.5 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-[4px] bg-argus-accent/10 text-[10px] font-bold text-argus-accent">
                       {layer.n}
                     </span>
                     <div>
@@ -139,7 +139,7 @@ export function ErrorCard({
                 )}
                 Technical details
               </summary>
-              <pre className="mt-2 max-h-40 overflow-auto rounded-sm bg-argus-bg-sunken p-2 font-mono text-xs text-argus-text">
+              <pre className="mt-2 max-h-40 overflow-auto rounded-[8px] bg-argus-bg-sunken p-3 font-mono text-xs text-argus-text">
                 {technicalDetails}
               </pre>
             </details>
@@ -159,7 +159,7 @@ export function ErrorCard({
               onClick={() => {
                 if (typeof window !== "undefined") window.location.reload();
               }}
-              className="inline-flex h-8 items-center gap-1 rounded-sm border border-argus-border bg-argus-bg px-2 text-xs text-argus-text hover:bg-argus-bg-elevated"
+              className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-argus-border bg-argus-bg px-2.5 text-xs text-argus-text transition-colors hover:bg-argus-bg-elevated"
             >
               <RotateCw className="h-3.5 w-3.5" aria-hidden />
               Retry
@@ -168,7 +168,7 @@ export function ErrorCard({
           <button
             type="button"
             onClick={() => setDismissed(true)}
-            className="inline-flex h-8 items-center gap-1 rounded-sm border border-argus-border bg-argus-bg px-2 text-xs text-argus-text-muted hover:bg-argus-bg-elevated"
+            className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-argus-border bg-argus-bg px-2.5 text-xs text-argus-text-muted transition-colors hover:bg-argus-bg-elevated"
             aria-label="Dismiss"
           >
             <X className="h-3.5 w-3.5" aria-hidden />
@@ -178,7 +178,7 @@ export function ErrorCard({
       </div>
 
       {!isReadOnly && !isRetryable && (
-        <p className="mx-4 mb-3 inline-flex items-center gap-1 text-xs text-argus-text-muted">
+        <p className="mx-5 mb-4 inline-flex items-center gap-1.5 text-xs text-argus-text-muted">
           <CheckCircle2 className="h-3.5 w-3.5 text-argus-accent" aria-hidden />
           The underlying data is safe — this is a request-level error, not a
           database problem.

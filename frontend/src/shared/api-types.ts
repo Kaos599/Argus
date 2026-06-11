@@ -75,7 +75,7 @@ export const TableCardProps = z.object({
     sortable: z.boolean().default(true),
     align: z.enum(['left', 'center', 'right']).default('left'),
   })).min(1).max(10),
-  rows: z.array(z.record(z.union([z.string(), z.number(), z.null()]))).min(1).max(1000),
+  rows: z.array(z.any()).min(1).max(1000),
   pageSize: z.number().min(10).max(100).default(25),
   enableSearch: z.boolean().default(true),
   enableExport: z.boolean().default(true),

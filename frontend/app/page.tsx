@@ -4,15 +4,11 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
-  Database,
   Eye,
   Lock,
   ShieldCheck,
   Sparkles,
   TrendingUp,
-  Users,
-  Workflow,
-  Search,
   Code2,
   Cpu,
   LayoutDashboard,
@@ -39,7 +35,7 @@ const PremiumIcon = ({ icon: Icon, colorClass = "from-blue-600 to-indigo-600", s
 export default function Landing() {
   return (
     <main className="min-h-screen bg-white text-gray-900 selection:bg-blue-100 overflow-x-hidden relative">
-      
+
       {/* Top nav */}
       <header className="relative border-b border-gray-100 bg-white/80 backdrop-blur-md z-50">
         <div className="mx-auto flex h-20 max-w-screen-xl items-center justify-between px-6">
@@ -68,11 +64,10 @@ export default function Landing() {
 
       {/* Hero Section */}
       <section className="relative mx-auto w-full px-6 pt-24 pb-16 md:pt-32 md:pb-32 overflow-hidden border-b border-gray-100">
-        {/* Dim, Transparent Gradient Mesh Background */}
         <div className="absolute inset-0 z-0 pointer-events-none">
-          <GradientMesh 
-            className="opacity-70" 
-            colors={["#a78bfa", "#60a5fa", "#34d399"]} 
+          <GradientMesh
+            className="opacity-70"
+            colors={["#a78bfa", "#60a5fa", "#34d399"]}
             speed={2.5}
             scale={1.2}
             distortion={6}
@@ -80,12 +75,11 @@ export default function Landing() {
             waveFreq={5}
             swirl={0.7}
           />
-          {/* Subtle bottom fade to blend with next section */}
           <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-white to-transparent" />
         </div>
 
         <div className="max-w-screen-xl mx-auto grid gap-16 md:grid-cols-2 md:items-center relative z-10">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
@@ -95,7 +89,10 @@ export default function Landing() {
               Your Instant AI Admin Dashboard
             </div>
             <h1 className="text-5xl font-extrabold leading-[1.1] tracking-tight md:text-6xl text-gray-900 drop-shadow-sm">
-              Connect your database. <span className="text-transparent bg-clip-text bg-gradient-to-br from-blue-700 to-indigo-600">Get instant insights.</span>
+              Connect your database.{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-br from-blue-700 to-indigo-600">
+                Get instant insights.
+              </span>
             </h1>
             <p className="mt-6 text-lg text-gray-600 leading-relaxed max-w-lg font-medium">
               No setup. No queries to write. Argus connects directly to your MongoDB and instantly acts as a personalized, generative dashboard for your entire team.
@@ -116,8 +113,8 @@ export default function Landing() {
               </Link>
             </div>
             <div className="mt-8 flex items-center gap-6 text-sm text-gray-500 font-bold">
-              <div className="flex items-center gap-1.5"><ShieldCheck className="w-5 h-5 text-emerald-500"/> Zero write risk</div>
-              <div className="flex items-center gap-1.5"><Cpu className="w-5 h-5 text-indigo-500"/> Generative UI</div>
+              <div className="flex items-center gap-1.5"><ShieldCheck className="w-5 h-5 text-emerald-500" /> Zero write risk</div>
+              <div className="flex items-center gap-1.5"><Cpu className="w-5 h-5 text-indigo-500" /> Generative UI</div>
             </div>
           </motion.div>
 
@@ -127,7 +124,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Bento Grid Features - Sales & Value Proposition */}
+      {/* Bento Grid Features */}
       <section className="relative z-10 mx-auto max-w-screen-xl px-6 py-24 bg-gray-50/30">
         <div className="text-center mb-16">
           <h2 className="text-3xl font-black tracking-tight text-gray-900">Make admins out of a dashboard, easily.</h2>
@@ -170,7 +167,7 @@ export default function Landing() {
 
       {/* Read-only Security Banner */}
       <section className="mx-auto max-w-screen-xl px-6 py-24">
-        <motion.div 
+        <motion.div
           whileInView={{ opacity: 1, y: 0 }}
           initial={{ opacity: 0, y: 20 }}
           viewport={{ once: true }}
@@ -187,7 +184,7 @@ export default function Landing() {
               Your production cluster is safe.
             </h2>
             <p className="mt-5 text-emerald-800/80 font-medium text-lg leading-relaxed">
-              We know the fear of connecting third-party tools to a live database. That's why Argus is built with three impenetrable layers of write-protection.
+              We know the fear of connecting third-party tools to a live database. That&apos;s why Argus is built with three impenetrable layers of write-protection.
             </p>
             <ul className="mt-8 space-y-4 text-base text-emerald-900 font-medium">
               {READ_ONLY_LAYERS.map((layer, i) => (

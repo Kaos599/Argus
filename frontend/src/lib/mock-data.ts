@@ -20,6 +20,8 @@ import type {
   PlanRequestType,
   PlanResponseType,
   ProbeResponseType,
+  QueryRequestType,
+  QueryResponseType,
   RefreshRequestType,
   RefreshResponseType,
   RenderEventType,
@@ -291,6 +293,156 @@ export async function mockAddCard(body: AddCardRequestType): Promise<AddCardResp
 export async function mockRefresh(_body: RefreshRequestType): Promise<RefreshResponseType> {
   await wait(800);
   return { refreshed_count: 5, error_count: 0 };
+}
+
+export async function mockQuery(body: QueryRequestType): Promise<QueryResponseType> {
+  await wait(700);
+  const p = body.message.toLowerCase();
+  const usersCard = {
+    componentName: "StatCard" as const,
+    module: "query",
+    props: {
+      label: "Total users",
+      value: 1000,
+      unit: "count" as const,
+      delta: 47,
+      deltaWindow: "week" as const,
+      trend: "up" as const,
+      comparisonText: "vs. last week",
+    },
+  };
+  if (p.includes("drop") || p.includes("delete") || p.includes("remove") || p.includes("truncate")) {
+    return {
+      content:
+        "I can't do that — Argus is read-only by design. Three layers of write protection make this impossible: the MCP server is started with MDB_MCP_READ_ONLY=true, your database user has only read permissions, and the result_set_guard blocks $out/$merge before they ever reach MongoDB.",
+      card: {
+        componentName: "ErrorCard" as const,
+        module: "query",
+        props: {
+          title: "Write refused",
+          message: "Argus can never perform writes against your cluster.",
+          isReadOnlyViolation: true,
+          isRetryable: false,
+          guidance:
+            "If you need to drop a collection, do it from the MongoDB shell or Atlas UI as a separate, explicit operation.",
+          errorCode: "READ_ONLY_VIOLATION",
+        },
+      },
+    };
+  }
+  if ((p.includes("count") && p.includes("user")) || p.includes("how many")) {
+    return {
+      content: "You have 1,000 users, up 47 this week.",
+      card: usersCard,
+    };
+  }
+  if (p.includes("top") || p.includes("country") || p.includes("by country")) {
+    return {
+      content: "Top 10 countries by user count:",
+      card: {
+        componentName: "BarChartCard" as const,
+        module: "query",
+        props: {
+          title: "Top countries by users",
+          orientation: "horizontal" as const,
+          bars: [
+            { label: "US", value: 412, color: "primary" },
+            { label: "IN", value: 198, color: "primary" },
+            { label: "GB", value: 87, color: "primary" },
+            { label: "DE", value: 73, color: "primary" },
+            { label: "BR", value: 64, color: "primary" },
+            { label: "FR", value: 52, color: "primary" },
+            { label: "JP", value: 41, color: "primary" },
+            { label: "CA", value: 38, color: "primary" },
+            { label: "AU", value: 22, color: "primary" },
+            { label: "Other", value: 13, color: "primary" },
+          ],
+          sortBy: "value-desc" as const,
+          showValues: true,
+        },
+      },
+    };
+  }
+  if (p.includes("daily") || p.includes("signup") || p.includes("trend")) {
+    return {
+      content: "Daily signups for the last 30 days:",
+      card: {
+        componentName: "TimeSeriesCard" as const,
+        module: "query",
+        props: {
+          title: "Daily signups",
+          series: [
+            {
+              name: "Signups",
+              color: "primary",
+              points: Array.from({ length: 30 }, (_, i) => {
+                const d = new Date();
+                d.setDate(d.getDate() - (29 - i));
+                return {
+                  t: d.toISOString(),
+                  v: 20 + Math.round(Math.sin(i / 3) * 8 + Math.random() * 6),
+                };
+              }),
+            },
+          ],
+          granularity: "day" as const,
+          showAnomalies: true,
+        },
+      },
+    };
+  }
+  if (p.includes("anomal") || p.includes("what") || p.includes("insight")) {
+    return {
+      content: "Looking at the last 7 days, here are the notable findings:",
+      card: {
+        componentName: "SummaryCard" as const,
+        module: "query",
+        props: {
+          title: "Weekly insights",
+          summary:
+            "Signups are trending up (+12% week-over-week). One anomaly detected: a 47% drop in Tuesday's signups.",
+          findings: [
+            { text: "Signups up 12% week-over-week", severity: "info" as const, metric: "signups", delta: 12 },
+            { text: "Tuesday saw a 47% signup drop", severity: "warning" as const, metric: "signups", delta: -47 },
+            { text: "Activation rate steady at 68%", severity: "info" as const, metric: "activation_rate" },
+          ],
+          suggestedActions: [
+            "Show me the Tuesday deploy timeline",
+            "Compare this week to last week",
+          ],
+        },
+      },
+    };
+  }
+  if (p.includes("spend") || p.includes("top users") || p.includes("table") || p.includes("list")) {
+    return {
+      content: "Top records:",
+      card: {
+        componentName: "TableCard" as const,
+        module: "query",
+        props: {
+          title: "Top records",
+          columns: [
+            { key: "email", label: "Email", format: "text" as const, sortable: true, align: "left" as const },
+            { key: "country", label: "Country", format: "text" as const, sortable: true, align: "left" as const },
+            { key: "ltv", label: "Value", format: "usd" as const, sortable: true, align: "right" as const },
+          ],
+          rows: Array.from({ length: 25 }, (_, i) => ({
+            email: `user${i + 1}@example.com`,
+            country: ["US", "IN", "GB", "DE", "BR", "FR", "JP"][i % 7],
+            ltv: 2000 - i * 32,
+          })),
+          pageSize: 10,
+          enableSearch: true,
+          enableExport: true,
+        },
+      },
+    };
+  }
+  return {
+    content:
+      "I can answer questions about your MongoDB data. Try asking about counts, top countries, or trends.",
+  };
 }
 
 export async function mockHealth(): Promise<HealthResponseType> {

@@ -115,19 +115,24 @@ async def add_card(
         ) from exc
 
     collection = request.collection or _default_collection_for(request.module)
-    params = request.params or {}
+    params = dict(request.params or {})
+    params.setdefault("collection", collection)
     sampled_schema = session.sampled_schema or {}
-    module = get_module(request.module)
+    from argus.insights.pipeline_utils import get_collection_fields as _gcf
+    coll_fields = _gcf(sampled_schema, collection)
+    if coll_fields:
+        params.setdefault("fields", coll_fields)
+    insight = get_module(request.module)
 
     try:
-        pipeline = module.generate_pipeline(sampled_schema, params)
+        pipeline = insight.generate_pipeline(sampled_schema, params)
         result = await mcp.call_tool(
             token,
             "mongodb_aggregate",
             {"collection": collection, "pipeline": pipeline},
         )
         docs = _extract_documents(result)
-        descriptor = module.render_card(docs, params)
+        descriptor = insight.render_card(docs, params)
     except Exception as exc:
         descriptor = CardDescriptor.error(
             f"Failed to add card: {exc}",
@@ -135,6 +140,7 @@ async def add_card(
             error_code=ErrorCode.MQL_EXECUTION_FAILED.value,
             is_retryable=True,
         )
+    descriptor.module = request.module.value
 
     card_id = uuid.uuid4().hex
     cards = list(session.cards) + [descriptor.model_dump(by_alias=True)]

@@ -32,7 +32,7 @@ export function StatCard({
       <div className="flex h-full flex-col justify-center">
         <p className="text-sm font-medium text-argus-text-muted">{label}</p>
         <p
-          className="mt-2 font-mono text-4xl font-bold tracking-tight text-argus-text tabular-nums"
+          className="mt-2 font-heading text-4xl font-bold tracking-tight text-argus-text tabular-nums"
           data-testid="stat-value"
         >
           {formatStatValue(value, unit, { compact: Math.abs(value) >= 10_000 })}

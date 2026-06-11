@@ -1,17 +1,11 @@
-"""Anomaly insight module (v1: z-score on a single daily metric).
+"""Anomaly insight module — schema-aware pipeline generation.
 
-Computes a trailing 28-day rolling mean and standard deviation for one
-metric (default: daily active users), then flags days where the
-metric's z-score exceeds a threshold (default: 2.5).
+Produces a **TimeSeriesCard** with z-score anomaly detection on
+a daily metric. The rolling stats are computed client-side in Python.
 
-v1 limitation: the rolling stats are computed client-side, not in the
-pipeline. We fetch 56 days of daily values and use ``statistics`` to
-compute mean/std in Python. This is fine for the v1 demo; a v2
-implementation can push the rolling stats into a ``$setWindowFields``
-stage.
-
-Card output: a ``TimeSeriesCard`` with ``showAnomalies=True`` and a
-``SummaryCard`` listing the flagged days.
+The pipeline avoids M0-restricted operators (``$dateTrunc``,
+``$dateSubtract``, ``$setWindowFields``) and uses ``$dateToString``
++ ``$group`` for daily aggregation.
 """
 
 from __future__ import annotations
@@ -19,6 +13,13 @@ from __future__ import annotations
 import statistics
 from typing import Any
 
+from argus.insights.pipeline_utils import (
+    cutoff_date_match,
+    find_date_field,
+    find_id_field,
+    get_collection_fields,
+    get_all_collections,
+)
 from argus.models.api_types import ModuleName
 from argus.models.card import (
     CardDescriptor,
@@ -32,33 +33,6 @@ from argus.models.card import (
     TimeSeriesSeries,
 )
 
-# This pipeline returns one row per day with the metric value. The
-# manager's guard adds a $limit at the end.
-_ANOMALY_PIPELINE: list[dict] = [
-    {
-        "$match": {
-            "timestamp": {
-                "$gte": {"$dateSubtract": {"startDate": "$$NOW", "unit": "day", "amount": 56}}
-            }
-        }
-    },
-    {
-        "$group": {
-            "_id": {"$dateTrunc": {"date": "$timestamp", "unit": "day"}},
-            "users": {"$addToSet": "$user_id"},
-            "event_count": {"$sum": 1},
-        }
-    },
-    {
-        "$project": {
-            "_id": 0,
-            "date": "$_id",
-            "value": {"$size": "$users"},
-        }
-    },
-    {"$sort": {"date": 1}},
-]
-
 
 class AnomalyModule:
     """Anomaly insight module."""
@@ -67,74 +41,137 @@ class AnomalyModule:
     required_collections = ["events"]
 
     def can_run(self, sampled_schema: dict[str, Any]) -> bool:
-        events = _get_collection(sampled_schema, "events")
-        if not events:
-            return False
-        fields = events.get("sample_fields") or events.get("fields") or []
-        return any("user_id" in str(f) or "_id" in str(f) for f in fields)
+        """Return True if any collection has a date field."""
+        for coll in get_all_collections(sampled_schema):
+            fields = get_collection_fields(sampled_schema, coll)
+            if find_date_field(fields):
+                return True
+        return False
 
     def generate_pipeline(
         self, sampled_schema: dict[str, Any], params: dict[str, Any]
     ) -> list[dict]:
-        return list(_ANOMALY_PIPELINE)
+        """Build a schema-aware anomaly pipeline.
+
+        Groups documents by day using ``$dateToString`` (avoids
+        ``$dateTrunc``) and counts documents per day. If a user/entity
+        ID field exists, also counts distinct entities.
+        """
+        collection = params.get("collection") or "users"
+        fields = params.get("fields") or get_collection_fields(sampled_schema, collection)
+        lookback = int(params.get("lookback_days", 56))
+
+        date_field = find_date_field(fields)
+        id_field = find_id_field(fields)
+
+        if not date_field:
+            return [{"$count": "count"}]
+
+        pipeline: list[dict] = []
+
+        # 1) Date filter
+        pipeline.append(cutoff_date_match(date_field, lookback))
+
+        # 2) Group by day using $dateToString
+        group_stage: dict[str, Any] = {
+            "_id": {
+                "$dateToString": {
+                    "format": "%Y-%m-%d",
+                    "date": f"${date_field}",
+                }
+            },
+            "event_count": {"$sum": 1},
+        }
+        if id_field and id_field != "_id":
+            group_stage["users"] = {"$addToSet": f"${id_field}"}
+
+        pipeline.append({"$group": group_stage})
+
+        # 3) Project to clean shape
+        project: dict[str, Any] = {
+            "_id": 0,
+            "date": "$_id",
+            "event_count": 1,
+        }
+        if id_field and id_field != "_id":
+            project["value"] = {"$size": "$users"}
+        else:
+            project["value"] = "$event_count"
+
+        pipeline.append({"$project": project})
+
+        # 4) Sort by date
+        pipeline.append({"$sort": {"date": 1}})
+
+        return pipeline
 
     def render_card(self, result: list[dict], params: dict[str, Any]) -> CardDescriptor:
+        """Render a TimeSeriesCard with z-score anomaly detection."""
         if not result:
             return CardDescriptor.error(
                 "Anomaly pipeline returned no results",
                 title="Anomaly: no data",
             )
 
+        # Handle simple $count fallback
+        if len(result) == 1 and "count" in result[0] and "date" not in result[0]:
+            total = int(result[0]["count"])
+            summary = SummaryCardProps(
+                title="Anomaly: not enough data",
+                summary=f"Only {total:,} documents found. Need time-series data for anomaly detection.",
+                findings=[],
+            )
+            return CardDescriptor.from_card(CardName.SUMMARY_CARD, summary)
+
         z_threshold = float(params.get("z_threshold", 2.5))
         trailing = int(params.get("trailing_window_days", 28))
-        points: list[TimeSeriesPoint] = []
-        anomalies: list[dict[str, Any]] = []
+        collection = params.get("collection", "data")
 
+        points: list[TimeSeriesPoint] = []
         for row in result:
             t = row.get("date")
             if hasattr(t, "isoformat"):
                 t = t.isoformat()
-            v = float(row.get("value", 0))
+            v = float(row.get("value", row.get("event_count", 0)))
             points.append(TimeSeriesPoint(t=str(t), v=v))
 
-        # Z-score the trailing window. We need at least `trailing` points
-        # of history before flagging anomalies; days before that get no
-        # z-score. For the v1 demo we use a simpler "all-time mean/std"
-        # z-score if there are fewer than `trailing` points.
-        values = [p.v for p in points]
-        if len(values) < 2:
+        if len(points) < 2:
             return _summary_only(
                 "Anomaly: not enough data",
                 "Need at least 2 days of data to compute z-scores.",
             )
 
+        # Z-score computation
+        values = [p.v for p in points]
         mean = statistics.fmean(values)
         stdev = statistics.pstdev(values) or 1.0
+
+        anomalies: list[dict[str, Any]] = []
         for point in points:
             z = (point.v - mean) / stdev
             if abs(z) >= z_threshold:
                 anomalies.append({"t": point.t, "v": point.v, "z": round(z, 2)})
 
-        # Build a TimeSeriesCard with the anomalies highlighted in the
-        # summary text. (The frontend uses showAnomalies to draw a
-        # dashed marker; we don't have per-point flags in the schema,
-        # so we put them in the summary.)
-        series = TimeSeriesSeries(name="DAU", points=points)
+        metric_label = "Activity"
+        series = TimeSeriesSeries(name=metric_label, points=points)
         ts_props = TimeSeriesCardProps(
-            title=f"Anomaly: DAU (z ≥ {z_threshold})",
+            title=f"Anomaly: {metric_label} per day ({collection}, z ≥ {z_threshold})",
             series=[series],
             granularity=TimeSeriesGranularity.DAY,
-            show_anomalies=True,
+            show_anomalies=bool(anomalies),
         )
+
         if not anomalies:
             return CardDescriptor.from_card(CardName.TIME_SERIES_CARD, ts_props)
 
-        # With anomalies, wrap in a SummaryCard.
+        # With anomalies, wrap in a SummaryCard
         summary_lines = [
-            f"{len(anomalies)} anomalous day(s) in the trailing {trailing}-day window."
+            f"{len(anomalies)} anomalous day(s) detected."
         ]
         for anom in anomalies[:3]:
-            summary_lines.append(f"• {anom['t'][:10]}: DAU={anom['v']:.0f} (z={anom['z']:+.2f})")
+            summary_lines.append(
+                f"• {anom['t'][:10]}: value={anom['v']:.0f} (z={anom['z']:+.2f})"
+            )
         findings: list[SummaryFinding] = []
         for anom in anomalies[:5]:
             severity = (
@@ -146,12 +183,12 @@ class AnomalyModule:
                 SummaryFinding(
                     text=f"{anom['t'][:10]}: z={anom['z']:+.2f}",
                     severity=severity,
-                    metric="dau",
+                    metric="activity",
                     delta=float(anom["z"]),
                 )
             )
         summary = SummaryCardProps(
-            title=f"Anomaly: {len(anomalies)} flagged day(s)",
+            title=f"Anomaly: {len(anomalies)} flagged day(s) in {collection}",
             summary="\n".join(summary_lines),
             findings=findings,
         )
@@ -161,15 +198,6 @@ class AnomalyModule:
 def _summary_only(title: str, text: str) -> CardDescriptor:
     summary = SummaryCardProps(title=title, summary=text, findings=[])
     return CardDescriptor.from_card(CardName.SUMMARY_CARD, summary)
-
-
-def _get_collection(schema: dict[str, Any], name: str) -> dict[str, Any] | None:
-    if name in schema and isinstance(schema[name], dict):
-        return schema[name]
-    collections = schema.get("collections")
-    if isinstance(collections, dict) and name in collections:
-        return collections[name]
-    return None
 
 
 __all__ = ["AnomalyModule"]
