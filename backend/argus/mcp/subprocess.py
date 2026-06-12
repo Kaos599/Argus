@@ -22,6 +22,8 @@ import os
 import re
 import signal
 import time
+import subprocess
+import threading
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -39,7 +41,7 @@ class _SubprocessRecord:
 
     tenant_id: str
     connection_string: str
-    process: asyncio.subprocess.Process
+    process: subprocess.Popen
     port: int
     base_url: str
     last_used: float = field(default_factory=time.monotonic)
@@ -285,17 +287,17 @@ class McpSubprocess:
     async def kill(self) -> None:
         """Terminate the subprocess. Idempotent."""
         proc = self._record.process
-        if proc.returncode is not None:
+        if proc.poll() is not None:
             return
         try:
             proc.send_signal(signal.SIGTERM)
-            try:
-                await asyncio.wait_for(proc.wait(), timeout=5.0)
-            except TimeoutError:
+            deadline = time.monotonic() + 5.0
+            while proc.poll() is None and time.monotonic() < deadline:
+                await asyncio.sleep(0.1)
+            if proc.poll() is None:
                 proc.kill()
-                await proc.wait()
+                proc.wait()
         except ProcessLookupError:
-            # Already dead.
             pass
 
 
@@ -338,6 +340,21 @@ def _normalize_tool_result(tool_name: str, result: dict[str, Any]) -> dict[str, 
     if not isinstance(result, dict):
         return {}
 
+    # Prefer structuredContent if present
+    struct = result.get("structuredContent")
+    if isinstance(struct, dict):
+        if tool_name == "mongodb_list_collections" and "collections" in struct:
+            return {"collections": struct["collections"]}
+        if tool_name == "mongodb_collection_schema":
+            if "schema" in struct and isinstance(struct["schema"], dict):
+                fields = list(struct["schema"].keys())
+                return {"fields": fields, "doc_count": struct.get("doc_count", 0)}
+            fields = struct.get("fields") or struct.get("sample_fields")
+            if fields:
+                return {"fields": fields, "doc_count": struct.get("doc_count", 0)}
+        if tool_name in ("mongodb_find", "mongodb_aggregate") and "documents" in struct:
+            return {"documents": struct["documents"]}
+
     if tool_name == "mongodb_list_collections" and "collections" not in result:
         names = _extract_collection_names(result)
         return {"collections": [{"name": name} for name in names]}
@@ -368,7 +385,22 @@ def _raise_for_mcp_tool_error(tool_name: str, result: Any) -> None:
 
 def _extract_collection_names(result: dict[str, Any]) -> list[str]:
     text = _result_text(result)
-    untrusted = _extract_untrusted_text(text)
+    untrusted = _extract_untrusted_text(text).strip()
+    
+    if untrusted:
+        try:
+            parsed = json.loads(untrusted)
+            if isinstance(parsed, list):
+                names = []
+                for item in parsed:
+                    if isinstance(item, dict) and "name" in item:
+                        names.append(str(item["name"]))
+                    elif isinstance(item, str):
+                        names.append(item)
+                return names
+        except json.JSONDecodeError:
+            pass
+
     names: list[str] = []
     for raw_line in untrusted.splitlines():
         line = raw_line.strip()
@@ -447,7 +479,7 @@ def _build_subprocess_env(connection_string: str) -> dict[str, str]:
 
 
 async def _wait_for_port_ready(
-    proc: asyncio.subprocess.Process,
+    proc: subprocess.Popen,
     host: str,
     port: int,
     timeout_s: float,
@@ -455,21 +487,17 @@ async def _wait_for_port_ready(
     """Wait for the MCP subprocess to accept a TCP connection."""
     deadline = time.monotonic() + timeout_s
     while True:
-        if proc.returncode is not None:
-            stderr = await proc.stderr.read()
+        if proc.poll() is not None:
             raise RuntimeError(
-                "mongodb-mcp-server exited before binding the port: "
-                f"returncode={proc.returncode}, stderr={stderr.decode(errors='replace')}"
+                f"mongodb-mcp-server exited before binding the port: returncode={proc.returncode}"
             )
 
         try:
             reader, writer = await asyncio.open_connection(host, port)
         except (OSError, asyncio.TimeoutError) as exc:
             if time.monotonic() >= deadline:
-                stderr = await proc.stderr.read()
                 raise RuntimeError(
-                    "mongodb-mcp-server did not bind the port within "
-                    f"{timeout_s}s: stderr={stderr.decode(errors='replace')}",
+                    f"mongodb-mcp-server did not bind the port within {timeout_s}s",
                 ) from exc
             await asyncio.sleep(0.1)
             continue
@@ -482,14 +510,11 @@ async def _wait_for_port_ready(
             return
 
 
-async def _log_subprocess_output(proc: asyncio.subprocess.Process, tenant_id: str) -> None:
-    """Log stderr from the subprocess while it runs."""
+def _log_subprocess_output_sync(proc: subprocess.Popen, tenant_id: str) -> None:
+    """Log stderr from the subprocess while it runs (blocking, run in thread)."""
     assert proc.stderr is not None
     try:
-        while True:
-            line = await proc.stderr.readline()
-            if not line:
-                break
+        for line in proc.stderr:
             logger.warning(
                 "mongodb-mcp-server tenant=%s stderr=%s",
                 tenant_id,
@@ -527,8 +552,16 @@ async def spawn_subprocess(
         port_allocator = _PortAllocator()
     port = port_allocator.allocate()
 
+    import shutil
+    import os
+    npm_path = os.path.expanduser(r"~\AppData\Roaming\npm")
+    path_env = os.environ.get("PATH", "")
+    if npm_path not in path_env:
+        os.environ["PATH"] = npm_path + os.pathsep + path_env
+    exe = shutil.which("mongodb-mcp-server") or "mongodb-mcp-server"
+
     cmd = [
-        "mongodb-mcp-server",
+        exe,
         "--transport",
         "http",
         "--httpHost",
@@ -546,14 +579,18 @@ async def spawn_subprocess(
         settings.mcp_server_version,
     )
 
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
+    proc = subprocess.Popen(
+        cmd,
         env=env,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
 
-    asyncio.create_task(_log_subprocess_output(proc, tenant_id))
+    threading.Thread(
+        target=_log_subprocess_output_sync,
+        args=(proc, tenant_id),
+        daemon=True,
+    ).start()
     await _wait_for_port_ready(proc, host, port, settings.mcp_startup_timeout_s)
 
     record = _SubprocessRecord(

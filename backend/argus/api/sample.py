@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from argus.api.dependencies import get_mcp_manager, get_session_store, resolve_session
@@ -13,6 +16,8 @@ from argus.models.api_types import (
     SampleResponse,
 )
 from argus.state.session_store import SessionStore
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["sample"])
 
@@ -75,6 +80,18 @@ async def sample(
             if not isinstance(fields, list):
                 fields = []
             doc_count = schema_result.get("doc_count")
+            if not doc_count:
+                try:
+                    count_args = {"collection": name, "pipeline": [{"$count": "count"}]}
+                    if database:
+                        count_args["database"] = database
+                    count_result = await mcp.call_tool(token, "mongodb_aggregate", count_args)
+                    docs = count_result.get("documents")
+                    if docs and isinstance(docs, list) and isinstance(docs[0], dict) and "count" in docs[0]:
+                        doc_count = docs[0]["count"]
+                except Exception:
+                    pass
+
             samples.append(
                 CollectionSample(
                     name=name,
@@ -86,6 +103,18 @@ async def sample(
             # Best-effort: skip the failing collection.
             continue
 
+    # Persist the sampled schema on the session so refresh and the planner
+    # can use it later without re-sampling.
+    sampled_schema: dict[str, Any] = {}
+    for s in samples:
+        sampled_schema[s.name] = {
+            "sample_fields": s.sample_fields,
+            "doc_count": s.doc_count,
+        }
+    try:
+        await store.update(token, sampled_schema=sampled_schema)
+    except Exception:
+        logger.exception("Failed to persist sampled schema")
     return SampleResponse(collections=samples)
 
 

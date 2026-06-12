@@ -21,6 +21,8 @@ import {
   type PlanRequestType,
   type PlanResponseType,
   type ProbeResponseType,
+  type QueryRequestType,
+  type QueryResponseType,
   type RefreshRequestType,
   type RefreshResponseType,
   type RenderEventType,
@@ -36,6 +38,7 @@ import {
   mockLayout,
   mockPlan,
   mockProbe,
+  mockQuery,
   mockRefresh,
   mockRenderEvents,
   mockSample,
@@ -66,12 +69,9 @@ export class ArgusApiError extends Error {
   }
 }
 
-const BASE_URL =
-  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_BASE_URL) ||
-  "http://localhost:8080";
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 
 const USE_MOCK = (() => {
-  if (typeof process === "undefined") return true;
   const v = process.env.NEXT_PUBLIC_USE_MOCK_DATA;
   return v === "true" || v === "1" || !v;
 })();
@@ -209,12 +209,16 @@ export async function* renderStream(
     const parts = buffer.split("\n\n");
     buffer = parts.pop() ?? "";
     for (const part of parts) {
+      const eventLine = part.split("\n").find((l) => l.startsWith("event:"));
+      const eventName = eventLine ? eventLine.slice(6).trim() : undefined;
       const line = part.split("\n").find((l) => l.startsWith("data:"));
       if (!line) continue;
       const json = line.slice(5).trim();
       try {
-        const ev = JSON.parse(json) as RenderEventType;
-        yield ev;
+        const dataPayload = JSON.parse(json);
+        if (eventName) {
+          yield { event: eventName, data: dataPayload } as RenderEventType;
+        }
       } catch {
         // ignore malformed events
       }
@@ -262,6 +266,14 @@ export async function refresh(
 ): Promise<RefreshResponseType> {
   if (USE_MOCK) return mockRefresh(body);
   return request<RefreshResponseType>("POST", "/api/v1/refresh", body, opts);
+}
+
+export async function query(
+  body: QueryRequestType,
+  opts: RequestOptions = {},
+): Promise<QueryResponseType> {
+  if (USE_MOCK) return mockQuery(body);
+  return request<QueryResponseType>("POST", "/api/v1/query", body, opts);
 }
 
 export async function health(opts: RequestOptions = {}): Promise<HealthResponseType> {

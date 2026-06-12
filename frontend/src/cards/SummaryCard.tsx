@@ -38,8 +38,8 @@ export function SummaryCard({
     <Card
       title={
         <span className="inline-flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-argus-primary" aria-hidden />
-          {title}
+          <Sparkles className="h-4 w-4 text-argus-accent" aria-hidden />
+          <span className="font-heading">{title}</span>
         </span>
       }
     >
@@ -54,7 +54,7 @@ export function SummaryCard({
               <li
                 key={i}
                 className={cn(
-                  "flex items-start gap-2 rounded-sm border border-argus-border px-3 py-2",
+                  "flex items-start gap-2.5 rounded-[8px] border border-argus-border px-3.5 py-2.5",
                   meta.bg,
                 )}
               >
@@ -81,7 +81,7 @@ export function SummaryCard({
 
       {suggestedActions && suggestedActions.length > 0 && (
         <div className="mt-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-argus-text-subtle">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-argus-text-subtle">
             You might also ask
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -89,7 +89,7 @@ export function SummaryCard({
               <button
                 key={i}
                 type="button"
-                className="rounded-full border border-argus-border bg-argus-bg px-3 py-1 text-xs text-argus-text hover:border-argus-primary hover:text-argus-primary"
+                className="rounded-[8px] border border-argus-border bg-argus-bg px-3 py-1.5 text-xs text-argus-text transition-colors hover:border-argus-accent hover:text-argus-accent"
               >
                 {s}
               </button>
@@ -99,7 +99,7 @@ export function SummaryCard({
       )}
 
       {relatedCard && (
-        <div className="mt-4 border-t border-argus-border pt-3">
+        <div className="mt-4 border-t border-argus-border pt-4">
           <CardRenderer
             descriptor={
               Array.isArray((relatedCard as { series?: unknown }).series)
@@ -114,7 +114,7 @@ export function SummaryCard({
         </div>
       )}
 
-      <div className="mt-4 flex items-center gap-1 text-xs text-argus-text-subtle">
+      <div className="mt-4 flex items-center gap-1.5 text-xs text-argus-text-subtle">
         <CheckCircle2 className="h-3.5 w-3.5 text-argus-accent" aria-hidden />
         <span>Read-only — no writes performed</span>
       </div>

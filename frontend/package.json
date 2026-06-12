@@ -13,13 +13,17 @@
   "dependencies": {
     "@tambo-ai/react": "^1.2.8",
     "clsx": "^2.1.1",
+    "framer-motion": "^12.40.0",
     "lucide-react": "^1.17.0",
     "next": "15.5.18",
+    "ogl": "^1.0.11",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-grid-layout": "^2.2.3",
+    "react-markdown": "^10.1.0",
     "react-resizable": "^4.0.1",
     "recharts": "^3.8.1",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^3.25.76"

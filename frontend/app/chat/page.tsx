@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { Loader2, Lock, Send, Sparkles, User } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { TopBar } from "@/components/TopBar";
 import { CardRenderer } from "@/cards";
 import { useChat } from "@/lib/chat";
@@ -24,8 +26,8 @@ export default function ChatPage() {
         className="mx-auto flex h-[calc(100vh-3.5rem)] max-w-3xl flex-col px-4"
       >
         <header className="border-b border-argus-border py-4">
-          <h1 className="inline-flex items-center gap-2 text-xl font-semibold">
-            <Sparkles className="h-5 w-5 text-argus-primary" aria-hidden />
+          <h1 className="inline-flex items-center gap-2 font-heading text-xl font-semibold">
+            <Sparkles className="h-5 w-5 text-argus-accent" aria-hidden />
             Chat with your data
           </h1>
           <p className="mt-1 text-xs text-argus-text-muted">
@@ -36,36 +38,54 @@ export default function ChatPage() {
 
         <div
           ref={scrollRef}
-          className="flex-1 space-y-4 overflow-y-auto py-4"
+          className="flex-1 space-y-5 overflow-y-auto py-4"
           role="log"
           aria-live="polite"
           aria-label="Chat messages"
         >
-          {messages.map((m) => (
-            <Message key={m.id} message={m} />
+          {messages.map((m, i) => (
+            <div
+              key={m.id}
+              className={cn(
+                "animate-fade-in-up",
+                i > 0 && "argus-stagger-1",
+              )}
+              style={{ animationFillMode: "forwards" }}
+            >
+              <Message message={m} />
+            </div>
           ))}
           {isStreaming && (
-            <div className="flex items-center gap-2 text-xs text-argus-text-muted">
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+            <div className="flex items-center gap-2.5 rounded-[12px] border border-argus-border bg-argus-bg-elevated px-4 py-3 text-xs text-argus-text-muted">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-argus-accent" aria-hidden />
               Argus is thinking…
             </div>
           )}
         </div>
 
         <div className="border-t border-argus-border py-3">
-          <div className="mb-2 flex gap-2 overflow-x-auto">
-            {suggestions.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setValue(s)}
-                className="inline-flex h-8 flex-shrink-0 items-center rounded-full border border-argus-border bg-argus-bg-elevated px-3 text-xs text-argus-text-muted hover:border-argus-primary hover:text-argus-primary"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          {suggestions.length > 0 && (
+            <div className="mb-3 flex gap-2 overflow-x-auto">
+              {suggestions.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => {
+                    setValue(s);
+                    requestAnimationFrame(() => {
+                      const form = document.getElementById("chat-form") as HTMLFormElement | null;
+                      if (form) form.requestSubmit();
+                    });
+                  }}
+                  className="inline-flex h-8 flex-shrink-0 items-center rounded-[8px] border border-argus-border bg-argus-bg-elevated px-3 text-xs text-argus-text-muted transition-colors hover:border-argus-accent hover:text-argus-accent"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
           <form
+            id="chat-form"
             onSubmit={(e) => {
               e.preventDefault();
               void submit();
@@ -87,12 +107,12 @@ export default function ChatPage() {
               }}
               rows={2}
               placeholder="Ask anything about your MongoDB data…"
-              className="flex-1 resize-none rounded-md border border-argus-border bg-argus-bg-sunken p-3 text-sm text-argus-text placeholder:text-argus-text-subtle focus:border-argus-primary focus:outline-none"
+              className="flex-1 resize-none rounded-[10px] border border-argus-border bg-argus-bg-sunken p-3 text-sm text-argus-text placeholder:text-argus-text-subtle transition-colors focus:border-argus-accent focus:outline-none focus:ring-1 focus:ring-argus-accent/20"
             />
             <button
               type="submit"
               disabled={!value.trim() || isStreaming}
-              className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md bg-argus-primary text-argus-primary-fg hover:opacity-90 disabled:opacity-50"
+              className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[10px] bg-argus-accent text-black transition-all hover:scale-[1.02] disabled:opacity-50"
               aria-label="Send"
             >
               <Send className="h-4 w-4" aria-hidden />
@@ -111,45 +131,39 @@ export default function ChatPage() {
 function Message({ message }: { message: ReturnType<typeof useChat>["messages"][number] }) {
   const isUser = message.role === "user";
   return (
-    <div
-      className={cn(
-        "flex gap-3",
-        isUser ? "justify-end" : "justify-start",
-      )}
-    >
+    <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
       {!isUser && (
-        <div
-          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-argus-primary text-argus-primary-fg"
-          aria-hidden
-        >
-          <Sparkles className="h-3.5 w-3.5" />
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[10px] bg-argus-accent/10 text-argus-accent" aria-hidden>
+          <Sparkles className="h-4 w-4" />
         </div>
       )}
       <div className={cn("max-w-[80%]", isUser && "text-right")}>
         {message.content && (
           <div
             className={cn(
-              "rounded-md border p-3 text-sm",
+              "prose prose-sm prose-invert max-w-none rounded-[12px] border px-4 py-3 text-sm leading-relaxed",
               isUser
-                ? "border-argus-primary bg-argus-info-bg/40 text-argus-text"
+                ? "border-argus-accent/20 bg-argus-accent/[0.04] text-argus-text"
                 : "border-argus-border bg-argus-bg-elevated text-argus-text",
+              "prose-code:rounded prose-code:bg-argus-bg-sunken prose-code:px-1 prose-code:py-0.5 prose-code:text-xs prose-code:font-mono prose-code:text-argus-accent prose-strong:text-argus-text prose-headings:text-argus-text",
             )}
           >
-            {message.content}
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {message.content}
+            </ReactMarkdown>
           </div>
         )}
         {message.card && (
-          <div className="mt-2 text-left">
-            <CardRenderer descriptor={message.card} />
+          <div className="mt-3 text-left">
+            <div className="min-h-[200px]">
+              <CardRenderer descriptor={message.card} />
+            </div>
           </div>
         )}
       </div>
       {isUser && (
-        <div
-          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-argus-bg-sunken text-argus-text-muted"
-          aria-hidden
-        >
-          <User className="h-3.5 w-3.5" />
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[10px] bg-argus-bg-sunken text-argus-text-muted" aria-hidden>
+          <User className="h-4 w-4" />
         </div>
       )}
     </div>

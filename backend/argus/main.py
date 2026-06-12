@@ -28,6 +28,7 @@ from argus.api import (
     health,
     plan,
     probe,
+    query,
     refresh,
     render,
     sample,
@@ -118,6 +119,7 @@ def _register_routers() -> None:
     app.include_router(render.router, prefix="/api/v1")
     app.include_router(dashboard.router, prefix="/api/v1")
     app.include_router(refresh.router, prefix="/api/v1")
+    app.include_router(query.router, prefix="/api/v1")
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(events.router, prefix="/api/v1")
 
