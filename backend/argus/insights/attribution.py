@@ -15,9 +15,7 @@ from argus.insights.pipeline_utils import (
     cutoff_date_match,
     find_categorical_field,
     find_date_field,
-    find_id_field,
     get_collection_fields,
-    get_all_collections,
 )
 from argus.models.api_types import ModuleName
 from argus.models.card import (
@@ -37,12 +35,16 @@ class AttributionModule:
     required_collections = ["events"]
 
     def can_run(self, sampled_schema: dict[str, Any]) -> bool:
-        """Return True if any collection has a categorical field."""
-        for coll in get_all_collections(sampled_schema):
-            fields = get_collection_fields(sampled_schema, coll)
-            if find_categorical_field(fields):
-                return True
-        return False
+        """Return True if the events collection has a channel/source field."""
+        for coll in self.required_collections:
+            if coll not in sampled_schema:
+                return False
+        fields = get_collection_fields(sampled_schema, "events")
+        lower = {f.lower() for f in fields}
+        return any(
+            hint in lower or any(hint in f for f in lower)
+            for hint in ["channel", "source", "campaign", "utm", "medium", "referrer"]
+        )
 
     def generate_pipeline(
         self, sampled_schema: dict[str, Any], params: dict[str, Any]
@@ -67,16 +69,18 @@ class AttributionModule:
 
         # 2) Group by category
         if cat_field:
-            pipeline.extend([
-                {
-                    "$group": {
-                        "_id": f"${cat_field}",
-                        "count": {"$sum": 1},
-                    }
-                },
-                {"$sort": {"count": -1}},
-                {"$limit": 10},
-            ])
+            pipeline.extend(
+                [
+                    {
+                        "$group": {
+                            "_id": f"${cat_field}",
+                            "count": {"$sum": 1},
+                        }
+                    },
+                    {"$sort": {"count": -1}},
+                    {"$limit": 10},
+                ]
+            )
         else:
             pipeline.append({"$count": "count"})
 

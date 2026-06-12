@@ -40,12 +40,12 @@ class FunnelModule:
     required_collections = ["users"]
 
     def can_run(self, sampled_schema: dict[str, Any]) -> bool:
-        """Return True if any collection has at least a date field."""
-        for coll_name in _find_usable_collections(sampled_schema):
-            fields = get_collection_fields(sampled_schema, coll_name)
-            if find_date_field(fields):
-                return True
-        return False
+        """Return True if the users collection has a date field."""
+        for coll in self.required_collections:
+            if coll not in sampled_schema:
+                return False
+        fields = get_collection_fields(sampled_schema, "users")
+        return bool(find_date_field(fields))
 
     def generate_pipeline(
         self, sampled_schema: dict[str, Any], params: dict[str, Any]
@@ -71,16 +71,18 @@ class FunnelModule:
 
         # 2) Group by categorical field for breakdown
         if cat_field:
-            pipeline.extend([
-                {
-                    "$group": {
-                        "_id": f"${cat_field}",
-                        "count": {"$sum": 1},
-                    }
-                },
-                {"$sort": {"count": -1}},
-                {"$limit": 10},
-            ])
+            pipeline.extend(
+                [
+                    {
+                        "$group": {
+                            "_id": f"${cat_field}",
+                            "count": {"$sum": 1},
+                        }
+                    },
+                    {"$sort": {"count": -1}},
+                    {"$limit": 10},
+                ]
+            )
         else:
             # Simple count-only pipeline
             pipeline.append({"$count": "count"})
@@ -96,6 +98,43 @@ class FunnelModule:
             )
 
         collection = params.get("collection", "users")
+
+        # Case 0: faceted result — single doc whose values are lists (e.g. from $facet)
+        if len(result) == 1 and any(isinstance(v, list) for v in result[0].values()):
+            doc = result[0]
+            findings: list[SummaryFinding] = []
+            related = None
+            for metric_name, rows in doc.items():
+                if not isinstance(rows, list) or not rows:
+                    continue
+                row = rows[0]
+                count = row.get("count") or row.get("total") or row.get("user_count")
+                if count is not None:
+                    findings.append(
+                        SummaryFinding(
+                            text=f"{metric_name}: {int(count):,}",
+                            severity=SummaryFindingSeverity.INFO,
+                            metric=metric_name,
+                        )
+                    )
+                elif len(rows) > 1 and "_id" in row and related is None:
+                    bars = [
+                        BarChartBar(label=str(r.get("_id", "?")), value=float(r.get("count", 0)))
+                        for r in rows[:10]
+                    ]
+                    if bars:
+                        related = BarChartCardProps(
+                            title=f"By {metric_name}",
+                            orientation=BarChartOrientation.VERTICAL,
+                            bars=bars,
+                        )
+            summary = SummaryCardProps(
+                title=f"Funnel: {collection} overview",
+                summary=f"{len(findings)} metrics tracked.",
+                findings=findings,
+                related_card=related,
+            )
+            return CardDescriptor.from_card(CardName.SUMMARY_CARD, summary)
 
         # Case 1: plain $count result → single doc like {"count": N}
         if len(result) == 1 and "count" in result[0] and "_id" not in result[0]:
@@ -161,12 +200,6 @@ class FunnelModule:
             related_card=related,
         )
         return CardDescriptor.from_card(CardName.SUMMARY_CARD, summary)
-
-
-def _find_usable_collections(schema: dict[str, Any]) -> list[str]:
-    """Return collection names from the schema."""
-    from argus.insights.pipeline_utils import get_all_collections
-    return get_all_collections(schema)
 
 
 __all__ = ["FunnelModule"]

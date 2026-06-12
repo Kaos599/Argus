@@ -17,12 +17,12 @@ from argus.insights.pipeline_utils import (
     find_date_field,
     find_id_field,
     get_collection_fields,
-    get_all_collections,
 )
 from argus.models.api_types import ModuleName
 from argus.models.card import (
     CardDescriptor,
     CardName,
+    HeatmapCardProps,
     SummaryCardProps,
     SummaryFinding,
     SummaryFindingSeverity,
@@ -40,12 +40,8 @@ class CohortModule:
     required_collections = ["events", "users"]
 
     def can_run(self, sampled_schema: dict[str, Any]) -> bool:
-        """Return True if any collection has a date field."""
-        for coll in get_all_collections(sampled_schema):
-            fields = get_collection_fields(sampled_schema, coll)
-            if find_date_field(fields):
-                return True
-        return False
+        """Return True if all required collections are present in the schema."""
+        return all(coll in sampled_schema for coll in self.required_collections)
 
     def generate_pipeline(
         self, sampled_schema: dict[str, Any], params: dict[str, Any]
@@ -129,6 +125,30 @@ class CohortModule:
             )
             return CardDescriptor.from_card(CardName.SUMMARY_CARD, summary)
 
+        # Retention heatmap format: {"_id": day_offset, "user_count": N}
+        if "user_count" in result[0] and isinstance(result[0].get("_id"), (int, float)):
+            day0 = float(result[0].get("user_count", 1)) or 1
+            row_labels = [f"Day {int(row['_id'])}" for row in result]
+            # Pad to min_length=2 if needed
+            if len(row_labels) < 2:
+                row_labels.append("Day ?")
+            values = [
+                [
+                    float(row.get("user_count", 0)),
+                    round(float(row.get("user_count", 0)) / day0 * 100, 1),
+                ]
+                for row in result
+            ]
+            if len(values) < 2:
+                values.append([0.0, 0.0])
+            heatmap = HeatmapCardProps(
+                title=f"Cohort retention ({collection})",
+                rowLabels=row_labels,
+                colLabels=["Users", "% Retained"],
+                values=values,
+            )
+            return CardDescriptor.from_card(CardName.HEATMAP_CARD, heatmap)
+
         # Build time series
         metric_key = "unique_count" if any("unique_count" in row for row in result) else "count"
         metric_label = "Unique Users" if metric_key == "unique_count" else "Documents"
@@ -147,9 +167,6 @@ class CohortModule:
             )
 
         series = TimeSeriesSeries(name=metric_label, points=points)
-        total = sum(p.v for p in points)
-        avg = total / len(points) if points else 0
-
         ts_props = TimeSeriesCardProps(
             title=f"Cohort: {metric_label} per day ({collection})",
             series=[series],

@@ -19,7 +19,6 @@ from argus.insights.pipeline_utils import (
     find_date_field,
     find_numeric_field,
     get_collection_fields,
-    get_all_collections,
 )
 from argus.models.api_types import ModuleName
 from argus.models.card import (
@@ -39,12 +38,12 @@ class RfmModule:
     required_collections = ["orders"]
 
     def can_run(self, sampled_schema: dict[str, Any]) -> bool:
-        """Return True if any collection has a groupable field."""
-        for coll in get_all_collections(sampled_schema):
-            fields = get_collection_fields(sampled_schema, coll)
-            if find_categorical_field(fields) or find_numeric_field(fields):
-                return True
-        return False
+        """Return True if the orders collection exists with a groupable field."""
+        for coll in self.required_collections:
+            if coll not in sampled_schema:
+                return False
+        fields = get_collection_fields(sampled_schema, "orders")
+        return bool(find_categorical_field(fields) or find_numeric_field(fields))
 
     def generate_pipeline(
         self, sampled_schema: dict[str, Any], params: dict[str, Any]
@@ -69,16 +68,18 @@ class RfmModule:
 
         # 2) Group by categorical field
         if cat_field:
-            pipeline.extend([
-                {
-                    "$group": {
-                        "_id": f"${cat_field}",
-                        "count": {"$sum": 1},
-                    }
-                },
-                {"$sort": {"count": -1}},
-                {"$limit": 10},
-            ])
+            pipeline.extend(
+                [
+                    {
+                        "$group": {
+                            "_id": f"${cat_field}",
+                            "count": {"$sum": 1},
+                        }
+                    },
+                    {"$sort": {"count": -1}},
+                    {"$limit": 10},
+                ]
+            )
         else:
             # Fallback: just count
             pipeline.append({"$count": "count"})
@@ -111,8 +112,8 @@ class RfmModule:
         # Grouped result → bar chart
         bars: list[BarChartBar] = []
         for row in result:
-            label = str(row.get("_id") or "other")
-            value = float(row.get("count") or 0)
+            label = str(row.get("bucket_range") or row.get("_id") or "other")
+            value = float(row.get("user_count") or row.get("count") or 0)
             bars.append(BarChartBar(label=label, value=value))
 
         if not bars:
